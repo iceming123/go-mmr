@@ -166,7 +166,7 @@ func (m *mmr) gen_proof(pos uint64) *MerkleProof {
 				// get left child sib
 				sib_pos := pos - sibling_offset(height)
 				// break if sib is out of mmr
-				if sib_pos > m.cur_size {
+				if sib_pos >= m.cur_size {
 					break
 				}
 				proofs = append(proofs,m.values[sib_pos].getHash())
@@ -176,7 +176,7 @@ func (m *mmr) gen_proof(pos uint64) *MerkleProof {
 				// get right child
 				sib_pos := pos + sibling_offset(height)
 				// break if sib is out of mmr
-				if sib_pos > m.cur_size {
+				if sib_pos >= m.cur_size {
 					break
 				}
 				proofs = append(proofs,m.values[sib_pos].getHash())
