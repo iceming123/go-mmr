@@ -1,6 +1,7 @@
 package gommr
 
 import (
+	"math"
 	// "errors"
 	"math/big"
 	"testing"
@@ -45,5 +46,7 @@ func Test01(t *testing.T) {
 func Test02(t *testing.T) {
 	num := uint64(0)
 	a := NextPowerOfTwo(num)
+	b := float64(100)
+	fmt.Println("b:", math.Log(b))
 	fmt.Println("aa", a, "isPow:", IsPowerOfTwo(num), "GetNodeFromLeaf:", GetNodeFromLeaf(6))
 }

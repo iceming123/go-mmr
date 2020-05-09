@@ -179,5 +179,5 @@ func vd_calculate_delta(block_difficulty, total_difficulty float64) float64 {
 // The cdf takes into account, that the last delta blocks are manually checked
 func cdf(y, delta float64) float64 {
 	// 1.0 - (y * delta.ln()).exp()
-	return 1.0 - math.Exp(y*math.Log10(delta))
+	return 1.0 - math.Exp(y*math.Log(delta))
 }
