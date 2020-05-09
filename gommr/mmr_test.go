@@ -41,3 +41,9 @@ func Test01(t *testing.T) {
 	run_mmr(10000, 50)
 	fmt.Println("finish")
 }
+
+func Test02(t *testing.T) {
+	num := uint64(0)
+	a := NextPowerOfTwo(num)
+	fmt.Println("aa", a, "isPow:", IsPowerOfTwo(num), "GetNodeFromLeaf:", GetNodeFromLeaf(6))
+}

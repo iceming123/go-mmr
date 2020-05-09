@@ -1,6 +1,7 @@
 package gommr
 
 import (
+	"math"
 	"math/big"
 	"math/bits"
 )
@@ -109,4 +110,74 @@ func pos_in_peaks(pos uint64, peaks []uint64) bool {
 		}
 	}
 	return false
+}
+func IsPowerOfTwo(n uint64) bool {
+	return n > 0 && ((n & (n - 1)) == 0)
+}
+func NextPowerOfTwo(n uint64) uint64 {
+	if n == 0 {
+		return 1
+	}
+	n--
+	n |= n >> 1
+	n |= n >> 2
+	n |= n >> 4
+	n |= n >> 8
+	n |= n >> 16
+	n |= n >> 32
+	n++
+	return n
+}
+func GetNodeFromLeaf(ln uint64) uint64 {
+	position, remaining := uint64(0), ln
+	for {
+		if remaining == 0 {
+			break
+		}
+		leftTreeLeafNumber := remaining
+		if !IsPowerOfTwo(remaining) {
+			leftTreeLeafNumber = NextPowerOfTwo(remaining) / 2
+		}
+		position += leftTreeLeafNumber + leftTreeLeafNumber - 1
+		remaining = remaining - leftTreeLeafNumber
+	}
+	return position
+}
+
+// calculate logarithm of x for base b:
+//
+// y = log_2(x)/log_2(b)
+//
+func log_b_of_x(b, x float64) float64 {
+	return math.Log2(x) / math.Log2(b)
+}
+
+// calculate how many independent queries m are required to have the specified security of lambda
+// and always check the last specified block difficulty manually in variable difficulty setting
+func vd_calculate_m(lambda, c, block_difficulty, total_difficulty float64, n uint64) float64 {
+	numerator := -lambda - math.Log2(c*float64(n))
+
+	x := 1.0 - (1.0 / (log_b_of_x(c, block_difficulty/total_difficulty)))
+	// x is not allowed to be negative
+	if big.NewFloat(x).Sign() == -1 {
+		x = 0.0
+	}
+	denumerator := math.Log2(x)
+	return numerator / denumerator
+}
+
+// delta in variable difficulty setting is the sum of difficulty checked with probability 1 in the
+// end
+func vd_calculate_delta(block_difficulty, total_difficulty float64) float64 {
+	return block_difficulty / total_difficulty
+}
+
+//
+//             y(ln(delta))
+// f(y) = 1 - e
+//
+// The cdf takes into account, that the last delta blocks are manually checked
+func cdf(y, delta float64) float64 {
+	// 1.0 - (y * delta.ln()).exp()
+	return 1.0 - math.Exp(y*math.Log10(delta))
 }

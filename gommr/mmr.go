@@ -4,6 +4,7 @@ import (
 	// "errors"
 	"encoding/hex"
 	"math/big"
+	"sort"
 
 	// "fmt"
 	// "math/big"
@@ -11,6 +12,11 @@ import (
 
 	"github.com/go-mmr/gommr/rlp"
 	"golang.org/x/crypto/sha3"
+)
+
+const (
+	c      = float64(0.5)
+	lambda = uint64(50)
 )
 
 type Hash [32]byte
@@ -121,6 +127,12 @@ func newMMR() *mmr {
 		curSize: 0,
 		leafNum: 0,
 	}
+}
+func (m *mmr) getNode(pos uint64) *Node {
+	if pos > m.curSize-1 {
+		return nil
+	}
+	return m.values[pos]
 }
 func (m *mmr) getLeafNumber() uint64 {
 	return m.leafNum
@@ -280,4 +292,91 @@ func (m *mmr) genProof(pos uint64) *MerkleProof {
 		}
 	}
 	return newMerkleProof(m.curSize, proofs)
+}
+func (m *mmr) genProof2(right_difficulty *big.Int) {
+	root_hash := m.getRoot()
+	r1, _ := new(big.Float).SetInt(right_difficulty).Float64()
+	r2, _ := new(big.Float).SetInt(new(big.Int).Add(m.getRootDifficulty(), right_difficulty)).Float64()
+	required_queries := uint64(vd_calculate_m(float64(lambda), c, r1, r2, m.getLeafNumber()) + 1.0)
+
+	weights, blocks := []float64{}, []uint64{}
+	for i := 0; i < int(required_queries); i++ {
+		h := RlpHash([]interface{}{root_hash, i})
+		random, _ := new(big.Float).SetInt(new(big.Int).SetBytes(h[:])).Float64()
+		r3, _ := new(big.Float).SetInt(m.getRootDifficulty()).Float64()
+		aggr_weight := cdf(random, vd_calculate_delta(r1, r3))
+		weights = append(weights, aggr_weight)
+	}
+	sort.Float64s(weights)
+	for _, v := range weights {
+		b := m.getChildByAggrWeight(v)
+		blocks = append(blocks, b)
+	}
+	// Pick up at specific sync point
+	// Add extra blocks, which are used for syncing from an already available state
+	// 1. block : first block of current 30_000 block interval
+	// 2. block : first block of previous 30_000 block interval
+	// 3. block : first block of third last 30_000 block interaval
+	// 4. block : first block of fourth last 30_000 block interval
+	// 5. block : first block of fiftf last 30_000 block interval
+	// 6. block : first block of sixth last 30_000 block interval
+	// 7. block : first block of seventh last 30_000 block interval
+	// 8. block : first block of eighth last 30_000 block interval
+	// 9. block : first block of ninth last 30_000 block interval
+	// 10. block: first block of tenth last 30_000 block interval
+
+	// let mut extra_blocks = vec![];
+	// let mut current_block = ((mmr.get_leaf_number() - 1) / 30000) * 30000;
+	// let mut added = 0;
+	// while current_block > 30000 && added < 10 {
+	//     blocks.push(current_block);
+	//     extra_blocks.push(current_block);
+	//     current_block -= 30000;
+	//     added += 1;
+	// }
+
+	// let mut blocks_dup = blocks.clone();
+	// blocks_dup.sort();
+	// let proof = Proof::generate_proof(&mut mmr, &mut blocks);
+
+	// (proof, blocks_dup, extra_blocks)
+}
+func (m *mmr) getChildByAggrWeightDisc(weight *big.Int) uint64 {
+	aggr_weight, aggr_node_number, curr_tree_number := big.NewInt(0), uint64(0), m.leafNum
+	for {
+		if curr_tree_number > 1 {
+			left_tree_number := curr_tree_number / 2
+			if !IsPowerOfTwo(curr_tree_number) {
+				left_tree_number = NextPowerOfTwo(curr_tree_number) / 2
+			}
+			n := m.getNode(GetNodeFromLeaf(aggr_node_number+left_tree_number) - 1)
+			if n == nil {
+				panic("wrong pos1")
+			}
+			left_tree_difficulty := n.getDifficulty()
+			if weight.Cmp(new(big.Int).Add(aggr_weight, left_tree_difficulty)) >= 0 {
+				// branch right
+				aggr_node_number += left_tree_number
+				left_root_node_number := GetNodeFromLeaf(aggr_node_number) - 1
+				n1 := m.getNode(left_root_node_number)
+				if n1 == nil {
+					panic("wrong pos2")
+				}
+				aggr_weight = new(big.Int).Add(aggr_weight, n1.getDifficulty())
+				curr_tree_number = curr_tree_number - left_tree_number
+			} else {
+				// branch left
+				curr_tree_number = left_tree_number
+			}
+		} else {
+			break
+		}
+	}
+	return aggr_node_number
+}
+func (m *mmr) getChildByAggrWeight(weight float64) uint64 {
+	root_weight := m.getRootDifficulty()
+	v1, _ := new(big.Float).Mul(new(big.Float).SetInt(root_weight), big.NewFloat(weight)).Int64()
+	weight_disc := big.NewInt(v1)
+	return m.getChildByAggrWeightDisc(weight_disc)
 }
