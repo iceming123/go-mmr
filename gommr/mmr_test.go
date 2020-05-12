@@ -50,3 +50,16 @@ func Test02(t *testing.T) {
 	fmt.Println("b:", math.Log(b), "pos_height:", get_depth(6))
 	fmt.Println("aa", a, "isPow:", IsPowerOfTwo(num), "GetNodeFromLeaf:", GetNodeFromLeaf(6))
 }
+func modify_slice(v []int) []int {
+	fmt.Println("len(v):", len(v))
+	v = append(v, 100)
+	fmt.Println("len(v):", len(v))
+	return v
+}
+
+func Test03(t *testing.T) {
+	v := []int{1, 2, 3, 4}
+	fmt.Println("len(v):", len(v))
+	v = modify_slice(v)
+	fmt.Println("len(v):", len(v))
+}

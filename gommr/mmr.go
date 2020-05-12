@@ -623,7 +623,13 @@ func (p ProofElems) is_empty() bool {
 type VerifyElems []*VerifyElem
 
 func (v VerifyElems) pop_back() *VerifyElem {
-	return nil
+	if len(v) <= 0 {
+		return nil
+	}
+	index := len(v) - 1
+	last := v[index]
+	v = append(v[:index], v[index+1:]...)
+	return last
 }
 func (v VerifyElems) is_empty() bool {
 	return len(v) == 0
@@ -672,7 +678,7 @@ func get_root(nodes []*VerifyElem) (Hash, *big.Int) {
 
 func generate_proof_recursive(currentNode *Node, blocks []uint64, proofs []*ProofElem,
 	max_left_tree_leaf_number uint64, startDepth int, leaf_number_sub_tree uint64, space uint64,
-	m *mmr) {
+	m *mmr) []*ProofElem {
 	if !currentNode.hasChildren(m) {
 		proofs = append(proofs, &ProofElem{
 			cat:     2,
@@ -683,7 +689,7 @@ func generate_proof_recursive(currentNode *Node, blocks []uint64, proofs []*Proo
 				td: currentNode.getDifficulty(),
 			},
 		})
-		return
+		return proofs
 	}
 	left_node, right_node := currentNode.getChildren(m)
 	pos := binary_search(blocks, max_left_tree_leaf_number)
@@ -695,7 +701,7 @@ func generate_proof_recursive(currentNode *Node, blocks []uint64, proofs []*Proo
 		if depth >= 1 {
 			diff = uint64(math.Pow(float64(2), float64(depth-1)))
 		}
-		generate_proof_recursive(left_node, left, proofs,
+		proofs = generate_proof_recursive(left_node, left, proofs,
 			max_left_tree_leaf_number-diff,
 			startDepth, next_left_leaf_number_subtree,
 			space+1, m)
@@ -716,7 +722,7 @@ func generate_proof_recursive(currentNode *Node, blocks []uint64, proofs []*Proo
 		if depth >= 1 {
 			diff = uint64(math.Pow(float64(2), float64(depth-1)))
 		}
-		generate_proof_recursive(right_node, right, proofs,
+		proofs = generate_proof_recursive(right_node, right, proofs,
 			max_left_tree_leaf_number+diff, startDepth,
 			leaf_number_sub_tree-next_left_leaf_number_subtree,
 			space+1, m)
@@ -731,6 +737,7 @@ func generate_proof_recursive(currentNode *Node, blocks []uint64, proofs []*Proo
 			},
 		})
 	}
+	return proofs
 }
 
 func (m *mmr) genProof0(right_difficulty *big.Int, blocks []uint64) *ProofInfo {
