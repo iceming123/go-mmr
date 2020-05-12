@@ -3,6 +3,8 @@ package gommr
 import (
 	// "errors"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -641,6 +643,145 @@ func get_root([]*VerifyElem) (Hash, *big.Int) {
 	return Hash{0}, nil
 }
 
+///////////////////////////////////////////////////////////////////////////////////////
+
+func generate_proof_recursive(currentNode *Node, blocks []uint64, proofs []*ProofElem,
+	max_left_tree_leaf_number uint64, startDepth int, leaf_number_sub_tree uint64, space uint64,
+	m *mmr) {
+	if !currentNode.hasChildren(m) {
+		proofs = append(proofs, &ProofElem{
+			cat:     2,
+			right:   false,
+			leafNum: 0,
+			res: &proofRes{
+				h:  currentNode.getHash(),
+				td: currentNode.getDifficulty(),
+			},
+		})
+		return
+	}
+	left_node, right_node := currentNode.getChildren(m)
+	pos := binary_search(blocks, max_left_tree_leaf_number)
+	left, right := splitAt(blocks, pos)
+	next_left_leaf_number_subtree := get_left_leaf_number(leaf_number_sub_tree)
+	if len(left) != 0 {
+		depth := get_depth(next_left_leaf_number_subtree)
+		diff := uint64(0)
+		if depth >= 1 {
+			diff = uint64(math.Pow(float64(2), float64(depth-1)))
+		}
+		generate_proof_recursive(left_node, left, proofs,
+			max_left_tree_leaf_number-diff,
+			startDepth, next_left_leaf_number_subtree,
+			space+1, m)
+	} else {
+		proofs = append(proofs, &ProofElem{
+			cat:     1,
+			right:   false,
+			leafNum: 0,
+			res: &proofRes{
+				h:  left_node.getHash(),
+				td: left_node.getDifficulty(),
+			},
+		})
+	}
+	if len(right) != 0 {
+		depth := get_depth(leaf_number_sub_tree - next_left_leaf_number_subtree)
+		diff := uint64(0)
+		if depth >= 1 {
+			diff = uint64(math.Pow(float64(2), float64(depth-1)))
+		}
+		generate_proof_recursive(right_node, right, proofs,
+			max_left_tree_leaf_number+diff, startDepth,
+			leaf_number_sub_tree-next_left_leaf_number_subtree,
+			space+1, m)
+	} else {
+		proofs = append(proofs, &ProofElem{
+			cat:     1,
+			right:   true,
+			leafNum: 0,
+			res: &proofRes{
+				h:  right_node.getHash(),
+				td: right_node.getDifficulty(),
+			},
+		})
+	}
+}
+
+func (m *mmr) genProof0(right_difficulty *big.Int, blocks []uint64) *ProofInfo {
+	blocks = SortAndRemoveRepeat(blocks)
+	proofs, rootNode, depth := []*ProofElem{}, m.getRootNode(), get_depth(m.getLeafNumber())
+	max_leaf_num := uint64(math.Pow(float64(2), float64(depth-1)))
+	generate_proof_recursive(rootNode, blocks, proofs, max_leaf_num, depth,
+		m.getLeafNumber(), 0, m)
+
+	proofs = append(proofs, &ProofElem{
+		cat:     0,
+		right:   false,
+		leafNum: m.getLeafNumber(),
+		res: &proofRes{
+			h:  rootNode.getHash(),
+			td: rootNode.getDifficulty(),
+		},
+	})
+	return &ProofInfo{
+		root_hash:       m.getRoot(),
+		root_difficulty: m.getRootDifficulty(),
+		leaf_number:     m.getLeafNumber(),
+		elems:           proofs,
+	}
+}
+
+func (m *mmr) CreateNewProof(right_difficulty *big.Int) (*ProofInfo, []uint64, []uint64) {
+	root_hash := m.getRoot()
+	r1, _ := new(big.Float).SetInt(right_difficulty).Float64()
+	r2, _ := new(big.Float).SetInt(new(big.Int).Add(m.getRootDifficulty(), right_difficulty)).Float64()
+	required_queries := uint64(vd_calculate_m(float64(lambda), c, r1, r2, m.getLeafNumber()) + 1.0)
+
+	weights, blocks := []float64{}, []uint64{}
+	for i := 0; i < int(required_queries); i++ {
+		h := RlpHash([]interface{}{root_hash, i})
+		random, _ := new(big.Float).SetInt(new(big.Int).SetBytes(h[:])).Float64()
+		r3, _ := new(big.Float).SetInt(m.getRootDifficulty()).Float64()
+		aggr_weight := cdf(random, vd_calculate_delta(r1, r3))
+		weights = append(weights, aggr_weight)
+	}
+	sort.Float64s(weights)
+	for _, v := range weights {
+		b := m.getChildByAggrWeight(v)
+		blocks = append(blocks, b)
+	}
+	// Pick up at specific sync point
+	// Add extra blocks, which are used for syncing from an already available state
+	// 1. block : first block of current 30_000 block interval
+	// 2. block : first block of previous 30_000 block interval
+	// 3. block : first block of third last 30_000 block interaval
+	// 4. block : first block of fourth last 30_000 block interval
+	// 5. block : first block of fiftf last 30_000 block interval
+	// 6. block : first block of sixth last 30_000 block interval
+	// 7. block : first block of seventh last 30_000 block interval
+	// 8. block : first block of eighth last 30_000 block interval
+	// 9. block : first block of ninth last 30_000 block interval
+	// 10. block: first block of tenth last 30_000 block interval
+	extra_blocks, current_block := []uint64{}, ((m.getLeafNumber()-1)/30000)*30000
+	added := 0
+	for {
+		if current_block > 30000 && added < 10 {
+			blocks = append(blocks, current_block)
+			extra_blocks = append(extra_blocks, current_block)
+			current_block -= 30000
+			added += 1
+		} else {
+			break
+		}
+	}
+
+	sort.Slice(blocks, func(i, j int) bool {
+		return blocks[i] < blocks[j]
+	})
+	return m.genProof0(right_difficulty, blocks), blocks, extra_blocks
+}
+
 func (p *ProofInfo) verifyProof0(blocks []*ProofBlock) bool {
 	blocks = SortAndRemoveRepeat2(blocks)
 	blocks = reverseProofRes(blocks)
@@ -769,90 +910,57 @@ func (p *ProofInfo) verifyProof0(blocks []*ProofBlock) bool {
 	}
 	return false
 }
+func verify_required_blocks(blocks []uint64, root_hash Hash, root_difficulty, right_difficulty *big.Int, root_leaf_number uint64) ([]*ProofBlock, error) {
 
-func generate_proof_recursive(currentNode *Node, blocks []uint64, proofs []*ProofElem,
-	max_left_tree_leaf_number uint64, startDepth int, leaf_number_sub_tree uint64, space uint64,
-	m *mmr) {
-	if !currentNode.hasChildren(m) {
-		proofs = append(proofs, &ProofElem{
-			cat:     2,
-			right:   false,
-			leafNum: 0,
-			res: &proofRes{
-				h:  currentNode.getHash(),
-				td: currentNode.getDifficulty(),
-			},
-		})
-		return
-	}
-	left_node, right_node := currentNode.getChildren(m)
-	pos := binary_search(blocks, max_left_tree_leaf_number)
-	left, right := splitAt(blocks, pos)
-	next_left_leaf_number_subtree := get_left_leaf_number(leaf_number_sub_tree)
-	if len(left) != 0 {
-		depth := get_depth(next_left_leaf_number_subtree)
-		diff := uint64(0)
-		if depth >= 1 {
-			diff = uint64(math.Pow(float64(2), float64(depth-1)))
+	r1, _ := new(big.Float).SetInt(right_difficulty).Float64()
+	r2, _ := new(big.Float).SetInt(new(big.Int).Add(root_difficulty, right_difficulty)).Float64()
+	required_queries := uint64(vd_calculate_m(float64(lambda), c, r1, r2, root_leaf_number) + 1.0)
+	extra_blocks, current_block := []uint64{}, ((root_leaf_number-1)/30000)*30000
+	added := 0
+	for {
+		if current_block > 30000 && added < 10 {
+			extra_blocks = append(extra_blocks, current_block)
+			current_block -= 30000
+			added += 1
+		} else {
+			break
 		}
-		generate_proof_recursive(left_node, left, proofs,
-			max_left_tree_leaf_number-diff,
-			startDepth, next_left_leaf_number_subtree,
-			space+1, m)
-	} else {
-		proofs = append(proofs, &ProofElem{
-			cat:     1,
-			right:   false,
-			leafNum: 0,
-			res: &proofRes{
-				h:  left_node.getHash(),
-				td: left_node.getDifficulty(),
-			},
-		})
 	}
-	if len(right) != 0 {
-		depth := get_depth(leaf_number_sub_tree - next_left_leaf_number_subtree)
-		diff := uint64(0)
-		if depth >= 1 {
-			diff = uint64(math.Pow(float64(2), float64(depth-1)))
+
+	// required queries can contain the same block number multiple times
+	// TODO: maybe multiple blocks can be pruned away?
+	if required_queries != uint64(len(blocks)-len(extra_blocks)) {
+		return nil, errors.New(fmt.Sprintf("false number of blocks provided: required: %v, got: %v", required_queries, len(blocks)))
+	}
+	weights := []float64{}
+	for i := 0; i < int(required_queries); i++ {
+		h := RlpHash([]interface{}{root_hash, i})
+		random, _ := new(big.Float).SetInt(new(big.Int).SetBytes(h[:])).Float64()
+		r3, _ := new(big.Float).SetInt(root_difficulty).Float64()
+		aggr_weight := cdf(random, vd_calculate_delta(r1, r3))
+		weights = append(weights, aggr_weight)
+	}
+	sort.Float64s(weights)
+	proof_blocks, weight_pos := []*ProofBlock{}, 0
+
+	for _, v := range blocks {
+		aggr_weight := weights[weight_pos]
+		if len(extra_blocks) > 0 {
+			index := len(extra_blocks) - 1
+			curr_extra_block := extra_blocks[index]
+			if v == curr_extra_block {
+				extra_blocks = append(extra_blocks[:index], extra_blocks[index+1:]...)
+				aggr_weight = 0 // 0--none
+			} else {
+				weight_pos++
+			}
+		} else {
+			weight_pos++
 		}
-		generate_proof_recursive(right_node, right, proofs,
-			max_left_tree_leaf_number+diff, startDepth,
-			leaf_number_sub_tree-next_left_leaf_number_subtree,
-			space+1, m)
-	} else {
-		proofs = append(proofs, &ProofElem{
-			cat:     1,
-			right:   true,
-			leafNum: 0,
-			res: &proofRes{
-				h:  right_node.getHash(),
-				td: right_node.getDifficulty(),
-			},
+		proof_blocks = append(proof_blocks, &ProofBlock{
+			number:      v,
+			aggr_weight: aggr_weight,
 		})
 	}
-}
-
-func (m *mmr) genProof0(right_difficulty *big.Int, blocks []uint64) *ProofInfo {
-	blocks = SortAndRemoveRepeat(blocks)
-	proofs, rootNode, depth := []*ProofElem{}, m.getRootNode(), get_depth(m.getLeafNumber())
-	max_leaf_num := uint64(math.Pow(float64(2), float64(depth-1)))
-	generate_proof_recursive(rootNode, blocks, proofs, max_leaf_num, depth,
-		m.getLeafNumber(), 0, m)
-
-	proofs = append(proofs, &ProofElem{
-		cat:     0,
-		right:   false,
-		leafNum: m.getLeafNumber(),
-		res: &proofRes{
-			h:  rootNode.getHash(),
-			td: rootNode.getDifficulty(),
-		},
-	})
-	return &ProofInfo{
-		root_hash:       m.getRoot(),
-		root_difficulty: m.getRootDifficulty(),
-		leaf_number:     m.getLeafNumber(),
-		elems:           proofs,
-	}
+	return proof_blocks, nil
 }
