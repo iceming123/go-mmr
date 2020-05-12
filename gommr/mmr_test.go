@@ -47,6 +47,6 @@ func Test02(t *testing.T) {
 	num := uint64(0)
 	a := NextPowerOfTwo(num)
 	b := float64(100)
-	fmt.Println("b:", math.Log(b))
+	fmt.Println("b:", math.Log(b), "pos_height:", get_depth(6))
 	fmt.Println("aa", a, "isPow:", IsPowerOfTwo(num), "GetNodeFromLeaf:", GetNodeFromLeaf(6))
 }

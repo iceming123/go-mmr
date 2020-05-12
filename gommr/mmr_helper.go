@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 	"math/bits"
+	"sort"
 )
 
 func countZore(num uint64) int {
@@ -178,6 +179,65 @@ func vd_calculate_delta(block_difficulty, total_difficulty float64) float64 {
 //
 // The cdf takes into account, that the last delta blocks are manually checked
 func cdf(y, delta float64) float64 {
-	// 1.0 - (y * delta.ln()).exp()
 	return 1.0 - math.Exp(y*math.Log(delta))
+}
+
+//////////////////////////////////////////////////////////////////
+func SortAndRemoveRepeat(slc []uint64) []uint64 {
+	sort.Slice(slc, func(i, j int) bool {
+		return slc[i] < slc[j]
+	})
+
+	result := []uint64{}
+	tempMap := map[uint64]byte{}
+
+	for _, e := range slc {
+		l := len(tempMap)
+		tempMap[e] = 0
+		if len(tempMap) != l {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+func SortAndRemoveRepeat2(slc []*ProofBlock) []*ProofBlock {
+	return nil
+}
+func reverseProofRes(s []*ProofBlock) []*ProofBlock {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+	return s
+}
+func binary_search(sli []uint64, val uint64) int {
+	return 0
+}
+func splitAt(sli []uint64, pos int) ([]uint64, []uint64) {
+	return nil, nil
+}
+
+// Get depth of the MMR with a specified leaf_number
+func get_depth(leaf_number uint64) int {
+	depth := 64 - leadingZeros(leaf_number) - 1
+	if !IsPowerOfTwo(leaf_number) {
+		depth += 1
+	}
+	return depth
+}
+
+// calc leaf number from complete node number
+func node_to_leaf_number(node_number uint64) uint64 {
+	return (node_number + 1) / 2
+}
+
+func leaf_to_node_number(leaf_number uint64) uint64 {
+	return (2 * leaf_number) - 1
+}
+
+func get_left_leaf_number(leaf_number uint64) uint64 {
+	if IsPowerOfTwo(leaf_number) {
+		return leaf_number / 2
+	} else {
+		return NextPowerOfTwo(leaf_number) / 2
+	}
 }
