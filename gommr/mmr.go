@@ -639,7 +639,32 @@ func (p ProofBlocks) pop() *ProofBlock {
 	return nil
 }
 
-func get_root([]*VerifyElem) (Hash, *big.Int) {
+func get_root(nodes []*VerifyElem) (Hash, *big.Int) {
+	tmp := []*VerifyElem{}
+	for _, v := range nodes {
+		tmp = append(tmp, v)
+	}
+	tmp_nodes := VerifyElems(tmp)
+	for {
+		if len(tmp) > 1 {
+			node2 := tmp_nodes.pop_back()
+			node1 := tmp_nodes.pop_back()
+			hash := merge2(node1.res.h, node2.res.h)
+			tmp_nodes = append(tmp_nodes, &VerifyElem{
+				res: &proofRes{
+					h:  hash,
+					td: new(big.Int).Add(node1.res.td, node2.res.td),
+				},
+				index:       math.MaxUint64, // uint64(-1) .. none
+				leaf_number: math.MaxUint64, // uint64(-1) .. none
+			})
+		} else {
+			break
+		}
+	}
+	if len(tmp_nodes) >= 1 {
+		return tmp_nodes[0].res.h, tmp_nodes[0].res.td
+	}
 	return Hash{0}, nil
 }
 
