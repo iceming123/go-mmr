@@ -183,7 +183,7 @@ func cdf(y, delta float64) float64 {
 }
 
 //////////////////////////////////////////////////////////////////
-func SortAndRemoveRepeat(slc []uint64) []uint64 {
+func SortAndRemoveRepeatForBlocks(slc []uint64) []uint64 {
 	sort.Slice(slc, func(i, j int) bool {
 		return slc[i] < slc[j]
 	})
@@ -200,20 +200,56 @@ func SortAndRemoveRepeat(slc []uint64) []uint64 {
 	}
 	return result
 }
-func SortAndRemoveRepeat2(slc []*ProofBlock) []*ProofBlock {
-	return nil
+func SortAndRemoveRepeatForProofBlocks(slc []*ProofBlock) []*ProofBlock {
+	nodes := ProofBlocks(slc)
+	sort.Sort(nodes)
+	result := []*ProofBlock{}
+	var e *ProofBlock
+
+	for _, v := range nodes {
+		if e == nil {
+			e = v
+		}
+		if !e.equal(v) {
+			result = append(result, e)
+			e = v
+		}
+	}
+	if e != nil {
+		result = append(result, e)
+	}
+	return result
 }
-func reverseProofRes(s []*ProofBlock) []*ProofBlock {
+func reverseForProofBlocks(s []*ProofBlock) []*ProofBlock {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
 		s[i], s[j] = s[j], s[i]
 	}
 	return s
 }
-func binary_search(sli []uint64, val uint64) int {
-	return 0
+func binary_search(arr []uint64, key uint64) int {
+	low, height := 0, len(arr)-1
+	mid := 0
+	for low <= height {
+		mid = (height + low) / 2
+		if key == arr[mid] {
+			return mid
+		} else if key > arr[mid] {
+			low = mid + 1
+			if low > height {
+				return low
+			}
+		} else {
+			height = mid - 1
+		}
+	}
+	return mid
 }
+
 func splitAt(sli []uint64, pos int) ([]uint64, []uint64) {
-	return nil, nil
+	if pos > len(sli) {
+		panic("out of slice")
+	}
+	return sli[:pos], sli[pos:]
 }
 
 // Get depth of the MMR with a specified leaf_number

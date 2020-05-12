@@ -611,10 +611,22 @@ type ProofInfo struct {
 type ProofElems []*ProofElem
 
 func (p ProofElems) pop_back() *ProofElem {
-	return nil
+	if len(p) <= 0 {
+		return nil
+	}
+	index := len(p) - 1
+	last := p[index]
+	p = append(p[:index], p[index+1:]...)
+	return last
 }
 func (p ProofElems) pop_front() *ProofElem {
-	return nil
+	if len(p) <= 0 {
+		return nil
+	}
+	index := 0
+	last := p[index]
+	p = append(p[:index], p[index+1:]...)
+	return last
 }
 func (p ProofElems) is_empty() bool {
 	return len(p) == 0
@@ -639,11 +651,28 @@ type ProofBlock struct {
 	number      uint64
 	aggr_weight float64
 }
+
+func (p *ProofBlock) equal(oth *ProofBlock) bool {
+	if oth == nil || p == nil {
+		return false
+	}
+	return p.number == oth.number
+}
+
 type ProofBlocks []*ProofBlock
 
 func (p ProofBlocks) pop() *ProofBlock {
-	return nil
+	if len(p) <= 0 {
+		return nil
+	}
+	index := len(p) - 1
+	last := p[index]
+	p = append(p[:index], p[index+1:]...)
+	return last
 }
+func (a ProofBlocks) Len() int           { return len(a) }
+func (a ProofBlocks) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ProofBlocks) Less(i, j int) bool { return a[i].number < a[j].number }
 
 func get_root(nodes []*VerifyElem) (Hash, *big.Int) {
 	tmp := []*VerifyElem{}
@@ -741,10 +770,10 @@ func generate_proof_recursive(currentNode *Node, blocks []uint64, proofs []*Proo
 }
 
 func (m *mmr) genProof0(right_difficulty *big.Int, blocks []uint64) *ProofInfo {
-	blocks = SortAndRemoveRepeat(blocks)
+	blocks = SortAndRemoveRepeatForBlocks(blocks)
 	proofs, rootNode, depth := []*ProofElem{}, m.getRootNode(), get_depth(m.getLeafNumber())
 	max_leaf_num := uint64(math.Pow(float64(2), float64(depth-1)))
-	generate_proof_recursive(rootNode, blocks, proofs, max_leaf_num, depth,
+	proofs = generate_proof_recursive(rootNode, blocks, proofs, max_leaf_num, depth,
 		m.getLeafNumber(), 0, m)
 
 	proofs = append(proofs, &ProofElem{
@@ -815,8 +844,8 @@ func (m *mmr) CreateNewProof(right_difficulty *big.Int) (*ProofInfo, []uint64, [
 }
 
 func (p *ProofInfo) verifyProof0(blocks []*ProofBlock) bool {
-	blocks = SortAndRemoveRepeat2(blocks)
-	blocks = reverseProofRes(blocks)
+	blocks = SortAndRemoveRepeatForProofBlocks(blocks)
+	blocks = reverseForProofBlocks(blocks)
 	proof_blocks := ProofBlocks(blocks)
 
 	proofs := ProofElems(p.elems)

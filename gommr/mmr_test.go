@@ -58,8 +58,12 @@ func modify_slice(v []int) []int {
 }
 
 func Test03(t *testing.T) {
-	v := []int{1, 2, 3, 4}
-	fmt.Println("len(v):", len(v))
-	v = modify_slice(v)
-	fmt.Println("len(v):", len(v))
+	v, key := []uint64{1, 2, 2, 2, 2, 3, 4, 5, 8, 13, 21, 34, 55}, uint64(0)
+	pos := binary_search(v, key)
+	fmt.Println("pos:", pos)
+
+	// fmt.Println("len(v):", len(v))
+	// v = modify_slice(v)
+	// fmt.Println("len(v):", len(v))
+	fmt.Println("finish")
 }
