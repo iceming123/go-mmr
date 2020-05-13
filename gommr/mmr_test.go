@@ -58,12 +58,10 @@ func modify_slice(v []int) []int {
 }
 
 func Test03(t *testing.T) {
-	v, key := []uint64{1, 2, 2, 2, 2, 3, 4, 5, 8, 13, 21, 34, 55}, uint64(0)
-	pos := binary_search(v, key)
-	fmt.Println("pos:", pos)
+	val := uint64(0x4029000000000000)
+	fmt.Println("val:", val, "fval:", ByteToFloat64(Uint64ToBytes(val)))
 
-	// fmt.Println("len(v):", len(v))
-	// v = modify_slice(v)
-	// fmt.Println("len(v):", len(v))
+	aa := [32]byte{2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}
+	fmt.Println("aa", Hash_to_f64(BytesToHash(aa[:])))
 	fmt.Println("finish")
 }

@@ -1,6 +1,7 @@
 package gommr
 
 import (
+	"encoding/binary"
 	"math"
 	"math/big"
 	"math/bits"
@@ -180,6 +181,29 @@ func vd_calculate_delta(block_difficulty, total_difficulty float64) float64 {
 // The cdf takes into account, that the last delta blocks are manually checked
 func cdf(y, delta float64) float64 {
 	return 1.0 - math.Exp(y*math.Log(delta))
+}
+
+func ByteToFloat64(bytes []byte) float64 {
+	bits := binary.LittleEndian.Uint64(bytes)
+	return math.Float64frombits(bits)
+}
+func Uint64ToBytes(i uint64) []byte {
+	var buf = make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, i)
+	return buf
+}
+
+// extract bits from the hash value to generate an f64 value
+// this is used for extracting randomness from hash values
+// https://news.ycombinator.com/item?id=9207874
+// http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/ARTICLES/dSFMT.pdf
+func Hash_to_f64(x Hash) float64 {
+	bytes := x[:]
+	bytes[0] = byte(63)             // bitmuster to ensure that f64 is between 0 and 1
+	bytes[1] = bytes[1] | byte(240) // bitmuster to ensure that f64 is between 0 and 1
+	b1 := bytes[:8]
+	u1 := binary.BigEndian.Uint64(b1)
+	return ByteToFloat64(Uint64ToBytes(u1)) - 1.0
 }
 
 //////////////////////////////////////////////////////////////////

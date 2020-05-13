@@ -505,7 +505,7 @@ func (m *mmr) genProof3(right_difficulty *big.Int) *Proof3 {
 	weights, blocks := []float64{}, []uint64{}
 	for i := 0; i < int(required_queries); i++ {
 		h := RlpHash([]interface{}{root_hash, i})
-		random, _ := new(big.Float).SetInt(new(big.Int).SetBytes(h[:])).Float64()
+		random := Hash_to_f64(h)
 		r3, _ := new(big.Float).SetInt(m.getRootDifficulty()).Float64()
 		aggr_weight := cdf(random, vd_calculate_delta(r1, r3))
 		weights = append(weights, aggr_weight)
@@ -802,7 +802,7 @@ func (m *mmr) CreateNewProof(right_difficulty *big.Int) (*ProofInfo, []uint64, [
 	weights, blocks := []float64{}, []uint64{}
 	for i := 0; i < int(required_queries); i++ {
 		h := RlpHash([]interface{}{root_hash, i})
-		random, _ := new(big.Float).SetInt(new(big.Int).SetBytes(h[:])).Float64()
+		random := Hash_to_f64(h)
 		r3, _ := new(big.Float).SetInt(m.getRootDifficulty()).Float64()
 		aggr_weight := cdf(random, vd_calculate_delta(r1, r3))
 		weights = append(weights, aggr_weight)
@@ -996,7 +996,7 @@ func verify_required_blocks(blocks []uint64, root_hash Hash, root_difficulty, ri
 	weights := []float64{}
 	for i := 0; i < int(required_queries); i++ {
 		h := RlpHash([]interface{}{root_hash, i})
-		random, _ := new(big.Float).SetInt(new(big.Int).SetBytes(h[:])).Float64()
+		random := Hash_to_f64(h)
 		r3, _ := new(big.Float).SetInt(root_difficulty).Float64()
 		aggr_weight := cdf(random, vd_calculate_delta(r1, r3))
 		weights = append(weights, aggr_weight)
