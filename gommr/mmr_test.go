@@ -18,31 +18,6 @@ func IntToBytes(n int) []byte {
 	binary.Write(bytebuf, binary.BigEndian, data)
 	return bytebuf.Bytes()
 }
-
-func run_mmr(count int, proof_pos uint64) {
-	mmr := newMMR()
-	positions := make([]*Node, 0, 0)
-
-	for i := 0; i < count; i++ {
-		positions = append(positions, mmr.push(&Node{
-			value:      BytesToHash(IntToBytes(i)),
-			difficulty: big.NewInt(0),
-		}))
-	}
-	merkle_root := mmr.getRoot()
-	// proof
-	pos := positions[proof_pos].index
-	// generate proof for proof_elem
-	proof := mmr.genProof(pos)
-	// verify proof
-	result := proof.verify(merkle_root, pos, positions[proof_pos].getHash())
-	fmt.Println("result:", result)
-}
-func Test01(t *testing.T) {
-	run_mmr(10000, 50)
-	fmt.Println("finish")
-}
-
 func Test02(t *testing.T) {
 	num := uint64(0)
 	a := NextPowerOfTwo(num)
@@ -99,5 +74,20 @@ func Test04(t *testing.T) {
 		res[index]++
 	}
 	fmt.Println(res)
+	fmt.Println("finish")
+}
+
+func Test05(t *testing.T) {
+	mmr := NewMMR()
+	positions := make([]*Node, 0, 0)
+
+	for i := 0; i < 10; i++ {
+		positions = append(positions, mmr.push(&Node{
+			value:      BytesToHash(IntToBytes(i)),
+			difficulty: big.NewInt(1000),
+		}))
+	}
+	proof, blocks, eblocks := mmr.CreateNewProof(big.NewInt(1000))
+	fmt.Println("proof:", proof, "blocks:", blocks, "eblocks:", eblocks)
 	fmt.Println("finish")
 }

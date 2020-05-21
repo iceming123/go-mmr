@@ -52,6 +52,12 @@ type Node struct {
 	index      uint64 // position in array
 }
 
+func NewNode(v Hash, d *big.Int) *Node {
+	return &Node{
+		value:      v,
+		difficulty: new(big.Int).Set(d),
+	}
+}
 func (n *Node) getHash() Hash {
 	return n.value
 }
@@ -140,111 +146,96 @@ func (n *Node) getChildren(m *mmr) (*Node, *Node) {
 	panic("This node has no children!")
 }
 
-type MerkleProof struct {
-	mmrSize uint64
-	proofs  []Hash
-}
-
-func newMerkleProof(mmrSize uint64, proof []Hash) *MerkleProof {
-	return &MerkleProof{
-		mmrSize: mmrSize,
-		proofs:  proof,
-	}
-}
-func (m *MerkleProof) verify(root Hash, pos uint64, leaf_hash Hash) bool {
-	peaks := get_peaks(m.mmrSize)
-	height := 0
-	for _, proof := range m.proofs {
-		// verify bagging peaks
-		if pos_in_peaks(pos, peaks) {
-			if pos == peaks[len(peaks)-1] {
-				leaf_hash = merge2(leaf_hash, proof)
-			} else {
-				leaf_hash = merge2(proof, leaf_hash)
-				pos = peaks[len(peaks)-1]
-			}
-			continue
-		}
-		// verify merkle path
-		pos_height, next_height := pos_height_in_tree(pos), pos_height_in_tree(pos+1)
-		if next_height > pos_height {
-			// we are in right child
-			leaf_hash = merge2(proof, leaf_hash)
-			pos += 1
-		} else {
-			leaf_hash = merge2(leaf_hash, proof)
-			pos += parent_offset(height)
-		}
-		height += 1
-	}
-	return equal_hash(leaf_hash, root)
-}
-
+/////////////////////////////////////////////////////////////////////////////////
 type proofRes struct {
 	h  Hash
 	td *big.Int
 }
-type SingleMerkleProof struct {
-	mmrSize uint64
-	proofs  []*proofRes
-	node    *proofRes
-	nodePos uint64
+type VerifyElem struct {
+	Res        *proofRes
+	Index      uint64
+	LeafNumber uint64
 }
 
-func newSingleMerkleProof(mmrSize uint64, proof []*proofRes, node *proofRes, pos uint64) *SingleMerkleProof {
-	return &SingleMerkleProof{
-		mmrSize: mmrSize,
-		proofs:  proof,
-		node:    node,
-		nodePos: pos,
+type ProofElem struct {
+	Cat     uint8 // 0--root,1--node,2 --child
+	Res     *proofRes
+	Right   bool
+	LeafNum uint64
+}
+type ProofInfo struct {
+	RootHash       Hash
+	RootDifficulty *big.Int
+	LeafNumber     uint64
+	Elems          []*ProofElem
+}
+type ProofElems []*ProofElem
+
+func (p ProofElems) pop_back() *ProofElem {
+	if len(p) <= 0 {
+		return nil
 	}
+	index := len(p) - 1
+	last := p[index]
+	p = append(p[:index], p[index+1:]...)
+	return last
 }
-
-func (m *SingleMerkleProof) verify(root Hash, rTD *big.Int) bool {
-	pos, leafHash, leafTD := m.nodePos, m.node.h, new(big.Int).Set(m.node.td)
-	peaks := get_peaks(m.mmrSize)
-	height := 0
-	for _, proof := range m.proofs {
-		// verify bagging peaks
-		if pos_in_peaks(pos, peaks) {
-			if pos == peaks[len(peaks)-1] {
-				leafHash = merge2(leafHash, proof.h)
-			} else {
-				leafHash = merge2(proof.h, leafHash)
-				pos = peaks[len(peaks)-1]
-			}
-			leafTD = new(big.Int).Add(leafTD, proof.td)
-			continue
-		}
-		// verify merkle path
-		posHeight, nextHeight := pos_height_in_tree(pos), pos_height_in_tree(pos+1)
-		if nextHeight > posHeight {
-			// we are in right child
-			leafHash = merge2(proof.h, leafHash)
-			pos += 1
-		} else {
-			leafHash = merge2(leafHash, proof.h)
-			pos += parent_offset(height)
-		}
-		leafTD = new(big.Int).Add(leafTD, proof.td)
-		height += 1
+func (p ProofElems) pop_front() *ProofElem {
+	if len(p) <= 0 {
+		return nil
 	}
-	return equal_hash(leafHash, root) && 0 == rTD.Cmp(leafTD)
+	index := 0
+	last := p[index]
+	p = append(p[:index], p[index+1:]...)
+	return last
+}
+func (p ProofElems) is_empty() bool {
+	return len(p) == 0
 }
 
-type Proof3 struct {
-	rootHash Hash
-	rootTD   *big.Int
-	proofs   []*SingleMerkleProof
-}
+type VerifyElems []*VerifyElem
 
-func newProof3(root Hash, td *big.Int, proofs []*SingleMerkleProof) *Proof3 {
-	return &Proof3{
-		rootHash: root,
-		rootTD:   new(big.Int).Set(td),
-		proofs:   proofs,
+func (v VerifyElems) pop_back() *VerifyElem {
+	if len(v) <= 0 {
+		return nil
 	}
+	index := len(v) - 1
+	last := v[index]
+	v = append(v[:index], v[index+1:]...)
+	return last
 }
+func (v VerifyElems) is_empty() bool {
+	return len(v) == 0
+}
+
+type ProofBlock struct {
+	Number     uint64
+	AggrWeight float64
+}
+
+func (p *ProofBlock) equal(oth *ProofBlock) bool {
+	if oth == nil || p == nil {
+		return false
+	}
+	return p.Number == oth.Number
+}
+
+type ProofBlocks []*ProofBlock
+
+func (p ProofBlocks) pop() *ProofBlock {
+	if len(p) <= 0 {
+		return nil
+	}
+	index := len(p) - 1
+	last := p[index]
+	p = append(p[:index], p[index+1:]...)
+	return last
+}
+func (a ProofBlocks) Len() int           { return len(a) }
+func (a ProofBlocks) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ProofBlocks) Less(i, j int) bool { return a[i].Number < a[j].Number }
+
+//////////////////////////////////////////////////////////////////////////////////////
 
 type mmr struct {
 	values  []*Node
@@ -252,7 +243,7 @@ type mmr struct {
 	leafNum uint64
 }
 
-func newMMR() *mmr {
+func NewMMR() *mmr {
 	return &mmr{
 		values:  make([]*Node, 0, 0),
 		curSize: 0,
@@ -302,19 +293,18 @@ func (m *mmr) getRoot() Hash {
 	if m.curSize == 1 {
 		return m.values[0].getHash()
 	}
-	rootNode := m.bagRHSPeaks2(0, get_peaks(m.curSize))
+	rootNode := m.bagRHSPeaks(0, get_peaks(m.curSize))
 	if rootNode != nil {
 		return rootNode.getHash()
 	} else {
 		return Hash{0}
 	}
-	// return m.bagRHSPeaks(0, get_peaks(m.curSize))
 }
 func (m *mmr) getRootNode() *Node {
 	if m.curSize == 1 {
 		return m.values[0]
 	}
-	return m.bagRHSPeaks2(0, get_peaks(m.curSize))
+	return m.bagRHSPeaks(0, get_peaks(m.curSize))
 }
 func (m *mmr) getRootDifficulty() *big.Int {
 	if m.curSize == 0 {
@@ -323,38 +313,13 @@ func (m *mmr) getRootDifficulty() *big.Int {
 	if m.curSize == 1 {
 		return m.values[0].getDifficulty()
 	}
-	rootNode := m.bagRHSPeaks2(0, get_peaks(m.curSize))
+	rootNode := m.bagRHSPeaks(0, get_peaks(m.curSize))
 	if rootNode != nil {
 		return rootNode.getDifficulty()
 	}
 	return nil
 }
-func (m *mmr) bagRHSPeaks(pos uint64, peaks []uint64) Hash {
-	rhs_peak_hashes := make([]Hash, 0, 0)
-	for _, v := range peaks {
-		if v > pos {
-			rhs_peak_hashes = append(rhs_peak_hashes, m.values[v].getHash())
-		}
-	}
-	for {
-		if len(rhs_peak_hashes) <= 1 {
-			break
-		}
-		last := len(rhs_peak_hashes) - 1
-		right := rhs_peak_hashes[last]
-		rhs_peak_hashes = rhs_peak_hashes[:last]
-		last = len(rhs_peak_hashes) - 1
-		left := rhs_peak_hashes[last]
-		rhs_peak_hashes = rhs_peak_hashes[:last]
-		rhs_peak_hashes = append(rhs_peak_hashes, merge2(right, left))
-	}
-	if len(rhs_peak_hashes) == 1 {
-		return rhs_peak_hashes[0]
-	} else {
-		return Hash{0}
-	}
-}
-func (m *mmr) bagRHSPeaks2(pos uint64, peaks []uint64) *Node {
+func (m *mmr) bagRHSPeaks(pos uint64, peaks []uint64) *Node {
 	rhsPeakNodes := make([]*Node, 0, 0)
 	for _, v := range peaks {
 		if v > pos {
@@ -380,177 +345,9 @@ func (m *mmr) bagRHSPeaks2(pos uint64, peaks []uint64) *Node {
 	}
 	return nil
 }
-func (m *mmr) genProof(pos uint64) *MerkleProof {
-	proofs := make([]Hash, 0, 0)
-	height := 0
-	for {
-		if pos < m.curSize {
-			pos_height, next_height := pos_height_in_tree(pos), pos_height_in_tree(pos+1)
-			if next_height > pos_height {
-				// get left child sib
-				sib_pos := pos - sibling_offset(height)
-				// break if sib is out of mmr
-				if sib_pos >= m.curSize {
-					break
-				}
-				proofs = append(proofs, m.values[sib_pos].getHash())
-				// goto parent node
-				pos = pos + 1
-			} else {
-				// get right child
-				sib_pos := pos + sibling_offset(height)
-				// break if sib is out of mmr
-				if sib_pos >= m.curSize {
-					break
-				}
-				proofs = append(proofs, m.values[sib_pos].getHash())
-				// goto parent node
-				next_pos := pos + parent_offset(height)
-				pos = next_pos
-			}
-			height += 1
-		} else {
-			break
-		}
-	}
-	// now pos is peak of the mountain(because pos can't find a sibling)
-	peak_pos := pos
-	peaks := get_peaks(m.curSize)
-	// bagging rhs peaks into one hash
-	rhs_peak_hash := m.bagRHSPeaks(peak_pos, peaks)
-	if !equal_hash(rhs_peak_hash, Hash{0}) {
-		proofs = append(proofs, rhs_peak_hash)
-	}
-	// put left peaks to proof
-	for i := len(peaks) - 1; i >= 0; i-- {
-		p := peaks[i]
-		if p < pos {
-			proofs = append(proofs, m.values[p].getHash())
-		}
-	}
-	return newMerkleProof(m.curSize, proofs)
-}
-func (m *mmr) genProof2(pos uint64) *SingleMerkleProof {
-	localPos := pos
-	proofs := make([]*proofRes, 0, 0)
-	height := 0
-	for {
-		if pos < m.curSize {
-			pos_height, next_height := pos_height_in_tree(pos), pos_height_in_tree(pos+1)
-			if next_height > pos_height {
-				// get left child sib
-				sib_pos := pos - sibling_offset(height)
-				// break if sib is out of mmr
-				if sib_pos >= m.curSize {
-					break
-				}
-				proofs = append(proofs, &proofRes{
-					h:  m.values[sib_pos].getHash(),
-					td: new(big.Int).Set(m.values[sib_pos].getDifficulty()),
-				})
-				// goto parent node
-				pos = pos + 1
-			} else {
-				// get right child
-				sib_pos := pos + sibling_offset(height)
-				// break if sib is out of mmr
-				if sib_pos >= m.curSize {
-					break
-				}
-				proofs = append(proofs, &proofRes{
-					h:  m.values[sib_pos].getHash(),
-					td: new(big.Int).Set(m.values[sib_pos].getDifficulty()),
-				})
-				// goto parent node
-				next_pos := pos + parent_offset(height)
-				pos = next_pos
-			}
-			height += 1
-		} else {
-			break
-		}
-	}
-	// now pos is peak of the mountain(because pos can't find a sibling)
-	peak_pos := pos
-	peaks := get_peaks(m.curSize)
-	// bagging rhs peaks into one hash
-	rhsPeakNode := m.bagRHSPeaks2(peak_pos, peaks)
-	if rhsPeakNode != nil {
-		proofs = append(proofs, &proofRes{
-			h:  rhsPeakNode.getHash(),
-			td: new(big.Int).Set(rhsPeakNode.getDifficulty()),
-		})
-	}
-	// put left peaks to proof
-	for i := len(peaks) - 1; i >= 0; i-- {
-		p := peaks[i]
-		if p < pos {
-			proofs = append(proofs, &proofRes{
-				h:  m.values[p].getHash(),
-				td: new(big.Int).Set(m.values[p].getDifficulty()),
-			})
-		}
-	}
-	return newSingleMerkleProof(m.curSize, proofs, &proofRes{
-		h:  m.values[localPos].getHash(),
-		td: new(big.Int).Set(m.values[localPos].getDifficulty()),
-	}, localPos)
-}
-func (m *mmr) genProof3(right_difficulty *big.Int) *Proof3 {
-	root_hash := m.getRoot()
-	r1, _ := new(big.Float).SetInt(right_difficulty).Float64()
-	r2, _ := new(big.Float).SetInt(new(big.Int).Add(m.getRootDifficulty(), right_difficulty)).Float64()
-	required_queries := uint64(vd_calculate_m(float64(lambda), c, r1, r2, m.getLeafNumber()) + 1.0)
 
-	weights, blocks := []float64{}, []uint64{}
-	for i := 0; i < int(required_queries); i++ {
-		h := RlpHash([]interface{}{root_hash, uint64(i)})
-		random := Hash_to_f64(h)
-		r3, _ := new(big.Float).SetInt(m.getRootDifficulty()).Float64()
-		aggr_weight := cdf(random, vd_calculate_delta(r1, r3))
-		weights = append(weights, aggr_weight)
-	}
-	sort.Float64s(weights)
-	for _, v := range weights {
-		b := m.getChildByAggrWeight(v)
-		blocks = append(blocks, b)
-	}
-	// Pick up at specific sync point
-	// Add extra blocks, which are used for syncing from an already available state
-	// 1. block : first block of current 30_000 block interval
-	// 2. block : first block of previous 30_000 block interval
-	// 3. block : first block of third last 30_000 block interaval
-	// 4. block : first block of fourth last 30_000 block interval
-	// 5. block : first block of fiftf last 30_000 block interval
-	// 6. block : first block of sixth last 30_000 block interval
-	// 7. block : first block of seventh last 30_000 block interval
-	// 8. block : first block of eighth last 30_000 block interval
-	// 9. block : first block of ninth last 30_000 block interval
-	// 10. block: first block of tenth last 30_000 block interval
-	extra_blocks, current_block := []uint64{}, ((m.getLeafNumber()-1)/30000)*30000
-	added := 0
-	for {
-		if current_block > 30000 && added < 10 {
-			blocks = append(blocks, current_block)
-			extra_blocks = append(extra_blocks, current_block)
-			current_block -= 30000
-			added += 1
-		} else {
-			break
-		}
-	}
-
-	sort.Slice(blocks, func(i, j int) bool {
-		return blocks[i] < blocks[j]
-	})
-	proofs := []*SingleMerkleProof{}
-	for _, v := range blocks {
-		proofs = append(proofs, m.genProof2(v))
-	}
-	return newProof3(m.getRoot(), m.getRootDifficulty(), proofs)
-}
 func (m *mmr) getChildByAggrWeightDisc(weight *big.Int) uint64 {
-	aggr_weight, aggr_node_number, curr_tree_number := big.NewInt(0), uint64(0), m.leafNum
+	AggrWeight, aggr_node_number, curr_tree_number := big.NewInt(0), uint64(0), m.leafNum
 	for {
 		if curr_tree_number > 1 {
 			left_tree_number := curr_tree_number / 2
@@ -562,7 +359,7 @@ func (m *mmr) getChildByAggrWeightDisc(weight *big.Int) uint64 {
 				panic("wrong pos1")
 			}
 			left_tree_difficulty := n.getDifficulty()
-			if weight.Cmp(new(big.Int).Add(aggr_weight, left_tree_difficulty)) >= 0 {
+			if weight.Cmp(new(big.Int).Add(AggrWeight, left_tree_difficulty)) >= 0 {
 				// branch right
 				aggr_node_number += left_tree_number
 				left_root_node_number := GetNodeFromLeaf(aggr_node_number) - 1
@@ -570,7 +367,7 @@ func (m *mmr) getChildByAggrWeightDisc(weight *big.Int) uint64 {
 				if n1 == nil {
 					panic("wrong pos2")
 				}
-				aggr_weight = new(big.Int).Add(aggr_weight, n1.getDifficulty())
+				AggrWeight = new(big.Int).Add(AggrWeight, n1.getDifficulty())
 				curr_tree_number = curr_tree_number - left_tree_number
 			} else {
 				// branch left
@@ -590,130 +387,16 @@ func (m *mmr) getChildByAggrWeight(weight float64) uint64 {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
-type VerifyElem struct {
-	res         *proofRes
-	index       uint64
-	leaf_number uint64
-}
 
-type ProofElem struct {
-	cat     uint8 // 0--root,1--node,2 --child
-	res     *proofRes
-	right   bool
-	leafNum uint64
-}
-type ProofInfo struct {
-	root_hash       Hash
-	root_difficulty *big.Int
-	leaf_number     uint64
-	elems           []*ProofElem
-}
-type ProofElems []*ProofElem
-
-func (p ProofElems) pop_back() *ProofElem {
-	if len(p) <= 0 {
-		return nil
-	}
-	index := len(p) - 1
-	last := p[index]
-	p = append(p[:index], p[index+1:]...)
-	return last
-}
-func (p ProofElems) pop_front() *ProofElem {
-	if len(p) <= 0 {
-		return nil
-	}
-	index := 0
-	last := p[index]
-	p = append(p[:index], p[index+1:]...)
-	return last
-}
-func (p ProofElems) is_empty() bool {
-	return len(p) == 0
-}
-
-type VerifyElems []*VerifyElem
-
-func (v VerifyElems) pop_back() *VerifyElem {
-	if len(v) <= 0 {
-		return nil
-	}
-	index := len(v) - 1
-	last := v[index]
-	v = append(v[:index], v[index+1:]...)
-	return last
-}
-func (v VerifyElems) is_empty() bool {
-	return len(v) == 0
-}
-
-type ProofBlock struct {
-	number      uint64
-	aggr_weight float64
-}
-
-func (p *ProofBlock) equal(oth *ProofBlock) bool {
-	if oth == nil || p == nil {
-		return false
-	}
-	return p.number == oth.number
-}
-
-type ProofBlocks []*ProofBlock
-
-func (p ProofBlocks) pop() *ProofBlock {
-	if len(p) <= 0 {
-		return nil
-	}
-	index := len(p) - 1
-	last := p[index]
-	p = append(p[:index], p[index+1:]...)
-	return last
-}
-func (a ProofBlocks) Len() int           { return len(a) }
-func (a ProofBlocks) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a ProofBlocks) Less(i, j int) bool { return a[i].number < a[j].number }
-
-func get_root(nodes []*VerifyElem) (Hash, *big.Int) {
-	tmp := []*VerifyElem{}
-	for _, v := range nodes {
-		tmp = append(tmp, v)
-	}
-	tmp_nodes := VerifyElems(tmp)
-	for {
-		if len(tmp) > 1 {
-			node2 := tmp_nodes.pop_back()
-			node1 := tmp_nodes.pop_back()
-			hash := merge2(node1.res.h, node2.res.h)
-			tmp_nodes = append(tmp_nodes, &VerifyElem{
-				res: &proofRes{
-					h:  hash,
-					td: new(big.Int).Add(node1.res.td, node2.res.td),
-				},
-				index:       math.MaxUint64, // uint64(-1) .. none
-				leaf_number: math.MaxUint64, // uint64(-1) .. none
-			})
-		} else {
-			break
-		}
-	}
-	if len(tmp_nodes) >= 1 {
-		return tmp_nodes[0].res.h, tmp_nodes[0].res.td
-	}
-	return Hash{0}, nil
-}
-
-///////////////////////////////////////////////////////////////////////////////////////
-
-func generate_proof_recursive(currentNode *Node, blocks []uint64, proofs []*ProofElem,
+func generateProofRecursive(currentNode *Node, blocks []uint64, proofs []*ProofElem,
 	max_left_tree_leaf_number uint64, startDepth int, leaf_number_sub_tree uint64, space uint64,
 	m *mmr) []*ProofElem {
 	if !currentNode.hasChildren(m) {
 		proofs = append(proofs, &ProofElem{
-			cat:     2,
-			right:   false,
-			leafNum: 0,
-			res: &proofRes{
+			Cat:     2,
+			Right:   false,
+			LeafNum: 0,
+			Res: &proofRes{
 				h:  currentNode.getHash(),
 				td: currentNode.getDifficulty(),
 			},
@@ -730,16 +413,16 @@ func generate_proof_recursive(currentNode *Node, blocks []uint64, proofs []*Proo
 		if depth >= 1 {
 			diff = uint64(math.Pow(float64(2), float64(depth-1)))
 		}
-		proofs = generate_proof_recursive(left_node, left, proofs,
+		proofs = generateProofRecursive(left_node, left, proofs,
 			max_left_tree_leaf_number-diff,
 			startDepth, next_left_leaf_number_subtree,
 			space+1, m)
 	} else {
 		proofs = append(proofs, &ProofElem{
-			cat:     1,
-			right:   false,
-			leafNum: 0,
-			res: &proofRes{
+			Cat:     1,
+			Right:   false,
+			LeafNum: 0,
+			Res: &proofRes{
 				h:  left_node.getHash(),
 				td: left_node.getDifficulty(),
 			},
@@ -751,16 +434,16 @@ func generate_proof_recursive(currentNode *Node, blocks []uint64, proofs []*Proo
 		if depth >= 1 {
 			diff = uint64(math.Pow(float64(2), float64(depth-1)))
 		}
-		proofs = generate_proof_recursive(right_node, right, proofs,
+		proofs = generateProofRecursive(right_node, right, proofs,
 			max_left_tree_leaf_number+diff, startDepth,
 			leaf_number_sub_tree-next_left_leaf_number_subtree,
 			space+1, m)
 	} else {
 		proofs = append(proofs, &ProofElem{
-			cat:     1,
-			right:   true,
-			leafNum: 0,
-			res: &proofRes{
+			Cat:     1,
+			Right:   true,
+			LeafNum: 0,
+			Res: &proofRes{
 				h:  right_node.getHash(),
 				td: right_node.getDifficulty(),
 			},
@@ -769,27 +452,27 @@ func generate_proof_recursive(currentNode *Node, blocks []uint64, proofs []*Proo
 	return proofs
 }
 
-func (m *mmr) genProof0(right_difficulty *big.Int, blocks []uint64) *ProofInfo {
+func (m *mmr) genProof(right_difficulty *big.Int, blocks []uint64) *ProofInfo {
 	blocks = SortAndRemoveRepeatForBlocks(blocks)
 	proofs, rootNode, depth := []*ProofElem{}, m.getRootNode(), get_depth(m.getLeafNumber())
 	max_leaf_num := uint64(math.Pow(float64(2), float64(depth-1)))
-	proofs = generate_proof_recursive(rootNode, blocks, proofs, max_leaf_num, depth,
+	proofs = generateProofRecursive(rootNode, blocks, proofs, max_leaf_num, depth,
 		m.getLeafNumber(), 0, m)
 
 	proofs = append(proofs, &ProofElem{
-		cat:     0,
-		right:   false,
-		leafNum: m.getLeafNumber(),
-		res: &proofRes{
+		Cat:     0,
+		Right:   false,
+		LeafNum: m.getLeafNumber(),
+		Res: &proofRes{
 			h:  rootNode.getHash(),
 			td: rootNode.getDifficulty(),
 		},
 	})
 	return &ProofInfo{
-		root_hash:       m.getRoot(),
-		root_difficulty: m.getRootDifficulty(),
-		leaf_number:     m.getLeafNumber(),
-		elems:           proofs,
+		RootHash:       m.getRoot(),
+		RootDifficulty: m.getRootDifficulty(),
+		LeafNumber:     m.getLeafNumber(),
+		Elems:          proofs,
 	}
 }
 
@@ -804,8 +487,8 @@ func (m *mmr) CreateNewProof(right_difficulty *big.Int) (*ProofInfo, []uint64, [
 		h := RlpHash([]interface{}{root_hash, uint64(i)})
 		random := Hash_to_f64(h)
 		r3, _ := new(big.Float).SetInt(m.getRootDifficulty()).Float64()
-		aggr_weight := cdf(random, vd_calculate_delta(r1, r3))
-		weights = append(weights, aggr_weight)
+		AggrWeight := cdf(random, vd_calculate_delta(r1, r3))
+		weights = append(weights, AggrWeight)
 	}
 	sort.Float64s(weights)
 	for _, v := range weights {
@@ -840,23 +523,53 @@ func (m *mmr) CreateNewProof(right_difficulty *big.Int) (*ProofInfo, []uint64, [
 	sort.Slice(blocks, func(i, j int) bool {
 		return blocks[i] < blocks[j]
 	})
-	return m.genProof0(right_difficulty, blocks), blocks, extra_blocks
+	return m.genProof(right_difficulty, blocks), blocks, extra_blocks
 }
 
-func (p *ProofInfo) verifyProof0(blocks []*ProofBlock) bool {
+///////////////////////////////////////////////////////////////////////////////////////
+
+func get_root(nodes []*VerifyElem) (Hash, *big.Int) {
+	tmp := []*VerifyElem{}
+	for _, v := range nodes {
+		tmp = append(tmp, v)
+	}
+	tmp_nodes := VerifyElems(tmp)
+	for {
+		if len(tmp) > 1 {
+			node2 := tmp_nodes.pop_back()
+			node1 := tmp_nodes.pop_back()
+			hash := merge2(node1.Res.h, node2.Res.h)
+			tmp_nodes = append(tmp_nodes, &VerifyElem{
+				Res: &proofRes{
+					h:  hash,
+					td: new(big.Int).Add(node1.Res.td, node2.Res.td),
+				},
+				Index:      math.MaxUint64, // uint64(-1) .. none
+				LeafNumber: math.MaxUint64, // uint64(-1) .. none
+			})
+		} else {
+			break
+		}
+	}
+	if len(tmp_nodes) >= 1 {
+		return tmp_nodes[0].Res.h, tmp_nodes[0].Res.td
+	}
+	return Hash{0}, nil
+}
+func (p *ProofInfo) VerifyProof(blocks []*ProofBlock) bool {
 	blocks = SortAndRemoveRepeatForProofBlocks(blocks)
 	blocks = reverseForProofBlocks(blocks)
 	proof_blocks := ProofBlocks(blocks)
 
-	proofs := ProofElems(p.elems)
+	proofs := ProofElems(p.Elems)
 	root_elem := proofs.pop_back()
-	if root_elem == nil || root_elem.cat != 0 {
+	if root_elem == nil || root_elem.Cat != 0 {
 		return false
 	}
 	if len(proofs) == 1 {
 		if it := proofs.pop_back(); it != nil {
-			if it.cat == 2 {
-				return equal_hash(it.res.h, root_elem.res.h)
+			if it.Cat == 2 {
+				return equal_hash(it.Res.h, root_elem.Res.h)
 			}
 		}
 		return false
@@ -865,9 +578,9 @@ func (p *ProofInfo) verifyProof0(blocks []*ProofBlock) bool {
 	for {
 		if !proofs.is_empty() {
 			proof_elem := proofs.pop_front()
-			if proof_elem.cat == 2 {
+			if proof_elem.Cat == 2 {
 				proof_block := proof_blocks.pop()
-				number := proof_block.number
+				number := proof_block.Number
 
 				if !nodes.is_empty() {
 					//TODO: Verification of previous MMR should happen here
@@ -875,86 +588,86 @@ func (p *ProofInfo) verifyProof0(blocks []*ProofBlock) bool {
 					//dies nicht überprüfen, wenn doch irgendwann vorhanden, dann einfach
 					//'block_header.mmr == old_root_hash' überprüfen
 					_, left_difficulty := get_root(nodes)
-					left, middle := new(big.Float).SetInt(left_difficulty), new(big.Float).Mul(new(big.Float).SetInt(root_elem.res.td), big.NewFloat(proof_block.aggr_weight))
-					right := new(big.Float).Add(new(big.Float).SetInt(left_difficulty), new(big.Float).SetInt(proof_elem.res.td))
+					left, middle := new(big.Float).SetInt(left_difficulty), new(big.Float).Mul(new(big.Float).SetInt(root_elem.Res.td), big.NewFloat(proof_block.AggrWeight))
+					right := new(big.Float).Add(new(big.Float).SetInt(left_difficulty), new(big.Float).SetInt(proof_elem.Res.td))
 					if left.Cmp(middle) > 0 || right.Cmp(middle) <= 0 {
 						// "aggregated difficulty is not correct, should coincide with: {} <= {} < {}",left, middle, right
 						return false
 					}
 				}
-				if number%2 == 0 && number != (root_elem.leafNum-1) {
+				if number%2 == 0 && number != (root_elem.LeafNum-1) {
 					right_node := proofs.pop_front()
-					right_node_hash, right_node_diff := right_node.res.h, new(big.Int).Set(right_node.res.td)
-					if right_node.cat == 2 || right_node.cat == 1 {
-						if right_node.cat == 2 {
+					right_node_hash, right_node_diff := right_node.Res.h, new(big.Int).Set(right_node.Res.td)
+					if right_node.Cat == 2 || right_node.Cat == 1 {
+						if right_node.Cat == 2 {
 							proof_blocks.pop()
 						}
 					} else {
 						// Expected ???
 						return false
 					}
-					hash := merge2(proof_elem.res.h, right_node_hash)
+					hash := merge2(proof_elem.Res.h, right_node_hash)
 					nodes = append(nodes, &VerifyElem{
-						res: &proofRes{
+						Res: &proofRes{
 							h:  hash,
-							td: new(big.Int).Add(proof_elem.res.td, right_node_diff),
+							td: new(big.Int).Add(proof_elem.Res.td, right_node_diff),
 						},
-						index:       number / 2,
-						leaf_number: root_elem.leafNum / 2,
+						Index:      number / 2,
+						LeafNumber: root_elem.LeafNum / 2,
 					})
 				} else {
 					res0 := nodes.pop_back()
-					hash := merge2(res0.res.h, proof_elem.res.h)
+					hash := merge2(res0.Res.h, proof_elem.Res.h)
 					nodes = append(nodes, &VerifyElem{
-						res: &proofRes{
+						Res: &proofRes{
 							h:  hash,
-							td: new(big.Int).Add(proof_elem.res.td, res0.res.td),
+							td: new(big.Int).Add(proof_elem.Res.td, res0.Res.td),
 						},
-						index:       number / 2,
-						leaf_number: root_elem.leafNum / 2,
+						Index:      number / 2,
+						LeafNumber: root_elem.LeafNum / 2,
 					})
 				}
-			} else if proof_elem.cat == 1 {
-				if proof_elem.right {
+			} else if proof_elem.Cat == 1 {
+				if proof_elem.Right {
 					left_node := nodes.pop_back()
-					hash := merge2(left_node.res.h, proof_elem.res.h)
+					hash := merge2(left_node.Res.h, proof_elem.Res.h)
 					nodes = append(nodes, &VerifyElem{
-						res: &proofRes{
+						Res: &proofRes{
 							h:  hash,
-							td: new(big.Int).Add(left_node.res.td, proof_elem.res.td),
+							td: new(big.Int).Add(left_node.Res.td, proof_elem.Res.td),
 						},
-						index:       left_node.index / 2,
-						leaf_number: left_node.leaf_number / 2,
+						Index:      left_node.Index / 2,
+						LeafNumber: left_node.LeafNumber / 2,
 					})
 				} else {
 					nodes = append(nodes, &VerifyElem{
-						res:         proof_elem.res,
-						index:       math.MaxUint64, // UINT64(-1)
-						leaf_number: math.MaxUint64, // UINT64(-1)
+						Res:        proof_elem.Res,
+						Index:      math.MaxUint64, // UINT64(-1)
+						LeafNumber: math.MaxUint64, // UINT64(-1)
 					})
 				}
-			} else if proof_elem.cat == 0 {
+			} else if proof_elem.Cat == 0 {
 				// do nothing
 			} else {
-				panic("invalid cat...")
+				panic("invalid Cat...")
 			}
 			for {
 				if len(nodes) > 1 {
 					node2 := nodes.pop_back()
 					node1 := nodes.pop_back()
-					if node2.index%2 != 1 && !proofs.is_empty() {
+					if node2.Index%2 != 1 && !proofs.is_empty() {
 						nodes = append(nodes, node1)
 						nodes = append(nodes, node2)
 						break
 					}
-					hash := merge2(node1.res.h, node2.res.h)
+					hash := merge2(node1.Res.h, node2.Res.h)
 					nodes = append(nodes, &VerifyElem{
-						res: &proofRes{
+						Res: &proofRes{
 							h:  hash,
-							td: new(big.Int).Add(node1.res.td, node2.res.td),
+							td: new(big.Int).Add(node1.Res.td, node2.Res.td),
 						},
-						index:       node2.index / 2,
-						leaf_number: node2.leaf_number / 2,
+						Index:      node2.Index / 2,
+						LeafNumber: node2.LeafNumber / 2,
 					})
 				} else {
 					break
@@ -967,11 +680,11 @@ func (p *ProofInfo) verifyProof0(blocks []*ProofBlock) bool {
 
 	res0 := nodes.pop_back()
 	if res0 != nil {
-		return equal_hash(root_elem.res.h, res0.res.h) && root_elem.res.td.Cmp(res0.res.td) == 0
+		return equal_hash(root_elem.Res.h, res0.Res.h) && root_elem.Res.td.Cmp(res0.Res.td) == 0
 	}
 	return false
 }
-func verify_required_blocks(blocks []uint64, root_hash Hash, root_difficulty, right_difficulty *big.Int, root_leaf_number uint64) ([]*ProofBlock, error) {
+func VerifyRequiredBlocks(blocks []uint64, root_hash Hash, root_difficulty, right_difficulty *big.Int, root_leaf_number uint64) ([]*ProofBlock, error) {
 
 	r1, _ := new(big.Float).SetInt(right_difficulty).Float64()
 	r2, _ := new(big.Float).SetInt(new(big.Int).Add(root_difficulty, right_difficulty)).Float64()
@@ -998,20 +711,20 @@ func verify_required_blocks(blocks []uint64, root_hash Hash, root_difficulty, ri
 		h := RlpHash([]interface{}{root_hash, uint64(i)})
 		random := Hash_to_f64(h)
 		r3, _ := new(big.Float).SetInt(root_difficulty).Float64()
-		aggr_weight := cdf(random, vd_calculate_delta(r1, r3))
-		weights = append(weights, aggr_weight)
+		AggrWeight := cdf(random, vd_calculate_delta(r1, r3))
+		weights = append(weights, AggrWeight)
 	}
 	sort.Float64s(weights)
 	proof_blocks, weight_pos := []*ProofBlock{}, 0
 
 	for _, v := range blocks {
-		aggr_weight := weights[weight_pos]
+		AggrWeight := weights[weight_pos]
 		if len(extra_blocks) > 0 {
 			index := len(extra_blocks) - 1
 			curr_extra_block := extra_blocks[index]
 			if v == curr_extra_block {
 				extra_blocks = append(extra_blocks[:index], extra_blocks[index+1:]...)
-				aggr_weight = 0 // 0--none
+				AggrWeight = 0 // 0--none
 			} else {
 				weight_pos++
 			}
@@ -1019,8 +732,8 @@ func verify_required_blocks(blocks []uint64, root_hash Hash, root_difficulty, ri
 			weight_pos++
 		}
 		proof_blocks = append(proof_blocks, &ProofBlock{
-			number:      v,
-			aggr_weight: aggr_weight,
+			Number:     v,
+			AggrWeight: AggrWeight,
 		})
 	}
 	return proof_blocks, nil
