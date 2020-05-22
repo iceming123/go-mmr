@@ -4,6 +4,7 @@ import (
 	"math"
 	// "errors"
 	"math/big"
+	"strings"
 	"testing"
 
 	// "encoding/hex"
@@ -31,7 +32,26 @@ func modify_slice(v []int) []int {
 	fmt.Println("len(v):", len(v))
 	return v
 }
-
+func (r *proofRes) String() string {
+	return fmt.Sprintf("{hash:%s, td:%v}", r.h.Hex(), r.td)
+}
+func (p *ProofElem) String() string {
+	if p.Cat == 2 {
+		return fmt.Sprintf("[Child,%s]", p.Res.String())
+	} else if p.Cat == 1 {
+		return fmt.Sprintf("[Node,%s,Right:%v]", p.Res.String(), p.Right)
+	} else {
+		return fmt.Sprintf("[Root,%s,LeafNum:%v]", p.Res.String(), p.LeafNum)
+	}
+}
+func (p *ProofInfo) String() string {
+	elems := make([]string, len(p.Elems))
+	for i, v := range p.Elems {
+		elems[i] = v.String()
+	}
+	return fmt.Sprintf("RootHash:%s \n,RootDiff:%v,LeafNum:%v \n,Elems:%s", p.RootHash.Hex(),
+		p.RootDifficulty, p.LeafNumber, strings.Join(elems, "\n "))
+}
 func Test03(t *testing.T) {
 	a, b := uint64(1), uint64(2)
 	fmt.Println("1:", RlpHash(a), "2:", RlpHash(b))
@@ -79,15 +99,23 @@ func Test04(t *testing.T) {
 
 func Test05(t *testing.T) {
 	mmr := NewMMR()
-	positions := make([]*Node, 0, 0)
-
-	for i := 0; i < 10; i++ {
-		positions = append(positions, mmr.push(&Node{
+	for i := 0; i < 11; i++ {
+		mmr.push(&Node{
 			value:      BytesToHash(IntToBytes(i)),
 			difficulty: big.NewInt(1000),
-		}))
+		})
 	}
-	proof, blocks, eblocks := mmr.CreateNewProof(big.NewInt(1000))
-	fmt.Println("proof:", proof, "blocks:", blocks, "eblocks:", eblocks)
+	right_difficulty := big.NewInt(1000)
+	fmt.Println("leaf_number:", mmr.getLeafNumber(), "root_difficulty:", mmr.getRootDifficulty())
+	proof, blocks, eblocks := mmr.CreateNewProof(right_difficulty)
+	fmt.Println("blocks_len:", len(blocks), "blocks:", blocks, "eblocks:", len(eblocks))
+	fmt.Println("proof:", proof)
+	pBlocks, err := VerifyRequiredBlocks(blocks, proof.RootHash, proof.RootDifficulty, right_difficulty, proof.LeafNumber)
+	if err != nil {
+		fmt.Println("err:", err)
+		return
+	}
+	b := proof.VerifyProof(pBlocks)
+	fmt.Println("b:", b)
 	fmt.Println("finish")
 }
