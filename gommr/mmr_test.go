@@ -92,7 +92,7 @@ func Test04(t *testing.T) {
 
 func Test05(t *testing.T) {
 	mmr := NewMMR()
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 90001; i++ {
 		mmr.push(&Node{
 			value:      BytesToHash(IntToBytes(i)),
 			difficulty: big.NewInt(1000),

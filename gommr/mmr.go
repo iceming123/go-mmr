@@ -522,7 +522,7 @@ func (m *mmr) CreateNewProof(right_difficulty *big.Int) (*ProofInfo, []uint64, [
 	added := 0
 	for {
 		if current_block > 30000 && added < 10 {
-			blocks = append(blocks, current_block)
+			// blocks = append(blocks, current_block)
 			extra_blocks = append(extra_blocks, current_block)
 			current_block -= 30000
 			added += 1
@@ -715,7 +715,8 @@ func VerifyRequiredBlocks(blocks []uint64, root_hash Hash, root_difficulty, righ
 
 	// required queries can contain the same block number multiple times
 	// TODO: maybe multiple blocks can be pruned away?
-	if required_queries != uint64(len(blocks)-len(extra_blocks)) {
+	// if required_queries != uint64(len(blocks)-len(extra_blocks))
+	if required_queries != uint64(len(blocks)) {
 		return nil, errors.New(fmt.Sprintf("false number of blocks provided: required: %v, got: %v", required_queries, len(blocks)))
 	}
 	weights := []float64{}
@@ -731,19 +732,23 @@ func VerifyRequiredBlocks(blocks []uint64, root_hash Hash, root_difficulty, righ
 	proof_blocks, weight_pos := []*ProofBlock{}, 0
 	fmt.Println("**weights:", len(weights), "weights:", weights)
 	for _, v := range blocks {
-		AggrWeight := weights[weight_pos]
-		if len(extra_blocks) > 0 {
-			index := len(extra_blocks) - 1
-			curr_extra_block := extra_blocks[index]
-			if v == curr_extra_block {
-				extra_blocks = append(extra_blocks[:index], extra_blocks[index+1:]...)
-				AggrWeight = 0 // 0--none
-			} else {
-				weight_pos++
-			}
-		} else {
-			weight_pos++
-		}
+		AggrWeight := float64(0)
+		// if len(extra_blocks) > 0 {
+		// 	index := len(extra_blocks) - 1
+		// 	curr_extra_block := extra_blocks[index]
+		// 	if v == curr_extra_block {
+		// 		extra_blocks = append(extra_blocks[:index], extra_blocks[index+1:]...)
+		// 		AggrWeight = 0 // 0--none
+		// 	} else {
+		// 		AggrWeight = weights[weight_pos]
+		// 		weight_pos++
+		// 	}
+		// } else {
+		// 	AggrWeight = weights[weight_pos]
+		// 	weight_pos++
+		// }
+		AggrWeight = weights[weight_pos]
+		weight_pos++
 		proof_blocks = append(proof_blocks, &ProofBlock{
 			Number:     v,
 			AggrWeight: AggrWeight,
