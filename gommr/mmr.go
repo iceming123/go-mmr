@@ -148,8 +148,9 @@ func (n *Node) getChildren(m *mmr) (*Node, *Node) {
 
 /////////////////////////////////////////////////////////////////////////////////
 type proofRes struct {
-	h  Hash
-	td *big.Int
+	h     Hash
+	td    *big.Int
+	index uint64
 }
 type VerifyElem struct {
 	Res        *proofRes
@@ -400,8 +401,9 @@ func generateProofRecursive(currentNode *Node, blocks []uint64, proofs []*ProofE
 			Right:   false,
 			LeafNum: 0,
 			Res: &proofRes{
-				h:  currentNode.getHash(),
-				td: currentNode.getDifficulty(),
+				h:     currentNode.getHash(),
+				td:    currentNode.getDifficulty(),
+				index: currentNode.index,
 			},
 		})
 		return proofs
@@ -426,8 +428,9 @@ func generateProofRecursive(currentNode *Node, blocks []uint64, proofs []*ProofE
 			Right:   false,
 			LeafNum: 0,
 			Res: &proofRes{
-				h:  left_node.getHash(),
-				td: left_node.getDifficulty(),
+				h:     left_node.getHash(),
+				td:    left_node.getDifficulty(),
+				index: left_node.index,
 			},
 		})
 	}
@@ -447,8 +450,9 @@ func generateProofRecursive(currentNode *Node, blocks []uint64, proofs []*ProofE
 			Right:   true,
 			LeafNum: 0,
 			Res: &proofRes{
-				h:  right_node.getHash(),
-				td: right_node.getDifficulty(),
+				h:     right_node.getHash(),
+				td:    right_node.getDifficulty(),
+				index: right_node.index,
 			},
 		})
 	}
@@ -457,6 +461,7 @@ func generateProofRecursive(currentNode *Node, blocks []uint64, proofs []*ProofE
 
 func (m *mmr) genProof(right_difficulty *big.Int, blocks []uint64) *ProofInfo {
 	blocks = SortAndRemoveRepeatForBlocks(blocks)
+	fmt.Println("**blocks_len:", len(blocks), "blocks:", blocks)
 	proofs, rootNode, depth := []*ProofElem{}, m.getRootNode(), get_depth(m.getLeafNumber())
 	max_leaf_num := uint64(math.Pow(float64(2), float64(depth-1)))
 	proofs = generateProofRecursive(rootNode, blocks, proofs, max_leaf_num, depth,
@@ -467,8 +472,9 @@ func (m *mmr) genProof(right_difficulty *big.Int, blocks []uint64) *ProofInfo {
 		Right:   false,
 		LeafNum: m.getLeafNumber(),
 		Res: &proofRes{
-			h:  rootNode.getHash(),
-			td: rootNode.getDifficulty(),
+			h:     rootNode.getHash(),
+			td:    rootNode.getDifficulty(),
+			index: rootNode.index,
 		},
 	})
 	return &ProofInfo{
@@ -487,13 +493,15 @@ func (m *mmr) CreateNewProof(right_difficulty *big.Int) (*ProofInfo, []uint64, [
 
 	weights, blocks := []float64{}, []uint64{}
 	for i := 0; i < int(required_queries); i++ {
-		h := RlpHash([]interface{}{root_hash, uint64(i)})
+		h := GenNewHash(root_hash, i)
 		random := Hash_to_f64(h)
 		r3, _ := new(big.Float).SetInt(m.getRootDifficulty()).Float64()
 		AggrWeight := cdf(random, vd_calculate_delta(r1, r3))
+		// fmt.Println("i", i, "random:", random, " r1:", r1, " r3:", r3, " AggrWeight:", AggrWeight, "hash:", h.Hex())
 		weights = append(weights, AggrWeight)
 	}
 	sort.Float64s(weights)
+	// fmt.Println("*weights:", len(weights), "weights:", weights)
 	for _, v := range weights {
 		b := m.getChildByAggrWeight(v)
 		blocks = append(blocks, b)
@@ -563,6 +571,7 @@ func (p *ProofInfo) VerifyProof(blocks []*ProofBlock) bool {
 	blocks = SortAndRemoveRepeatForProofBlocks(blocks)
 	blocks = reverseForProofBlocks(blocks)
 	proof_blocks := ProofBlocks(blocks)
+	fmt.Println("proof_blocks:", len(proof_blocks), "proof_blocks:", proof_blocks)
 
 	proofs := ProofElems(p.Elems)
 	root_elem := proofs.pop_back()
@@ -658,7 +667,7 @@ func (p *ProofInfo) VerifyProof(blocks []*ProofBlock) bool {
 				if len(nodes) > 1 {
 					node2 := nodes.pop_back()
 					node1 := nodes.pop_back()
-					if node2.Index%2 != 1 && !proofs.is_empty() {
+					if math.MaxUint64 == node2.Index || (node2.Index%2 != 1 && !proofs.is_empty()) {
 						nodes = append(nodes, node1)
 						nodes = append(nodes, node2)
 						break
@@ -711,7 +720,8 @@ func VerifyRequiredBlocks(blocks []uint64, root_hash Hash, root_difficulty, righ
 	}
 	weights := []float64{}
 	for i := 0; i < int(required_queries); i++ {
-		h := RlpHash([]interface{}{root_hash, uint64(i)})
+		// h := RlpHash([]interface{}{root_hash, uint64(i)})
+		h := GenNewHash(root_hash, i)
 		random := Hash_to_f64(h)
 		r3, _ := new(big.Float).SetInt(root_difficulty).Float64()
 		AggrWeight := cdf(random, vd_calculate_delta(r1, r3))
@@ -719,7 +729,7 @@ func VerifyRequiredBlocks(blocks []uint64, root_hash Hash, root_difficulty, righ
 	}
 	sort.Float64s(weights)
 	proof_blocks, weight_pos := []*ProofBlock{}, 0
-
+	fmt.Println("**weights:", len(weights), "weights:", weights)
 	for _, v := range blocks {
 		AggrWeight := weights[weight_pos]
 		if len(extra_blocks) > 0 {

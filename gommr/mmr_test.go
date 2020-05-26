@@ -8,17 +8,10 @@ import (
 	"testing"
 
 	// "encoding/hex"
-	"bytes"
-	"encoding/binary"
+
 	"fmt"
 )
 
-func IntToBytes(n int) []byte {
-	data := int64(n)
-	bytebuf := bytes.NewBuffer([]byte{})
-	binary.Write(bytebuf, binary.BigEndian, data)
-	return bytebuf.Bytes()
-}
 func Test02(t *testing.T) {
 	num := uint64(0)
 	a := NextPowerOfTwo(num)
@@ -33,7 +26,7 @@ func modify_slice(v []int) []int {
 	return v
 }
 func (r *proofRes) String() string {
-	return fmt.Sprintf("{hash:%s, td:%v}", r.h.Hex(), r.td)
+	return fmt.Sprintf("{index:%v,hash:%s, td:%v}", r.index, r.h.Hex(), r.td)
 }
 func (p *ProofElem) String() string {
 	if p.Cat == 2 {
@@ -99,7 +92,7 @@ func Test04(t *testing.T) {
 
 func Test05(t *testing.T) {
 	mmr := NewMMR()
-	for i := 0; i < 11; i++ {
+	for i := 0; i < 10000; i++ {
 		mmr.push(&Node{
 			value:      BytesToHash(IntToBytes(i)),
 			difficulty: big.NewInt(1000),

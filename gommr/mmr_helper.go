@@ -1,11 +1,14 @@
 package gommr
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math"
 	"math/big"
 	"math/bits"
 	"sort"
+
+	"golang.org/x/crypto/sha3"
 )
 
 func countZore(num uint64) int {
@@ -300,4 +303,22 @@ func get_left_leaf_number(leaf_number uint64) uint64 {
 	} else {
 		return NextPowerOfTwo(leaf_number) / 2
 	}
+}
+
+func Keccak256(data ...[]byte) []byte {
+	d := sha3.NewLegacyKeccak256()
+	for _, b := range data {
+		d.Write(b)
+	}
+	return d.Sum(nil)
+}
+func GenNewHash(h Hash, i int) Hash {
+	return BytesToHash(Keccak256(h[:], IntToBytes(i)))
+}
+
+func IntToBytes(n int) []byte {
+	data := int64(n)
+	bytebuf := bytes.NewBuffer([]byte{})
+	binary.Write(bytebuf, binary.BigEndian, data)
+	return bytebuf.Bytes()
 }
