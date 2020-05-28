@@ -27,12 +27,8 @@ func jumpLeft(pos uint64) uint64 {
 }
 func pos_height_in_tree(pos uint64) int {
 	pos += 1
-	for {
-		if !allOnes(pos) {
-			pos = jumpLeft(pos)
-		} else {
-			break
-		}
+	for !allOnes(pos) {
+		pos = jumpLeft(pos)
 	}
 	return 64 - leadingZeros(pos) - 1
 }
@@ -65,10 +61,7 @@ func left_peak_height_pos(mmrSize uint64) (int, uint64) {
 	pos := left_peak_pos_by_height(height)
 	//increase height and get most left pos of tree
 	//once pos is out of mmr_size we consider previous pos is left peak
-	for {
-		if pos >= mmrSize {
-			break
-		}
+	for pos < mmrSize {
 		height += 1
 		prev_pos = pos
 		pos = left_peak_pos_by_height(height)
@@ -135,10 +128,7 @@ func NextPowerOfTwo(n uint64) uint64 {
 }
 func GetNodeFromLeaf(ln uint64) uint64 {
 	position, remaining := uint64(0), ln
-	for {
-		if remaining == 0 {
-			break
-		}
+	for remaining != 0 {
 		leftTreeLeafNumber := remaining
 		if !IsPowerOfTwo(remaining) {
 			leftTreeLeafNumber = NextPowerOfTwo(remaining) / 2

@@ -85,25 +85,21 @@ func (n *Node) clone() *Node {
 }
 func (n *Node) hasChildren(m *mmr) bool {
 	elem_node_number, curr_root_node_number, aggr_node_number := n.index, m.getSize(), uint64(0)
-	for {
-		if curr_root_node_number > 2 {
-			leaf_number := node_to_leaf_number(curr_root_node_number)
-			left_tree_leaf_number := get_left_leaf_number(leaf_number)
-			left_tree_node_number := leaf_to_node_number(left_tree_leaf_number)
-			if (aggr_node_number + curr_root_node_number) == (elem_node_number + 1) {
-				return true
-			}
+	for curr_root_node_number > 2 {
+		leaf_number := node_to_leaf_number(curr_root_node_number)
+		left_tree_leaf_number := get_left_leaf_number(leaf_number)
+		left_tree_node_number := leaf_to_node_number(left_tree_leaf_number)
+		if (aggr_node_number + curr_root_node_number) == (elem_node_number + 1) {
+			return true
+		}
 
-			if elem_node_number < (aggr_node_number + left_tree_node_number) {
-				// branch left
-				curr_root_node_number = left_tree_node_number
-			} else {
-				// branch right
-				curr_root_node_number = curr_root_node_number - left_tree_node_number - 1
-				aggr_node_number += left_tree_node_number
-			}
+		if elem_node_number < (aggr_node_number + left_tree_node_number) {
+			// branch left
+			curr_root_node_number = left_tree_node_number
 		} else {
-			break
+			// branch right
+			curr_root_node_number = curr_root_node_number - left_tree_node_number - 1
+			aggr_node_number += left_tree_node_number
 		}
 	}
 	return false
@@ -111,35 +107,31 @@ func (n *Node) hasChildren(m *mmr) bool {
 func (n *Node) getChildren(m *mmr) (*Node, *Node) {
 	elem_node_number, curr_root_node_number, aggr_node_number := n.index, m.getSize(), uint64(0)
 
-	for {
-		if curr_root_node_number > 2 {
-			leaf_number := node_to_leaf_number(curr_root_node_number)
-			left_tree_leaf_number := get_left_leaf_number(leaf_number)
-			left_tree_node_number := leaf_to_node_number(left_tree_leaf_number)
+	for curr_root_node_number > 2 {
+		leaf_number := node_to_leaf_number(curr_root_node_number)
+		left_tree_leaf_number := get_left_leaf_number(leaf_number)
+		left_tree_node_number := leaf_to_node_number(left_tree_leaf_number)
 
-			if (aggr_node_number + curr_root_node_number) == (elem_node_number + 1) {
-				leaf_number = node_to_leaf_number(curr_root_node_number)
-				left_tree_leaf_number = get_left_leaf_number(leaf_number)
-				left_tree_node_number = leaf_to_node_number(left_tree_leaf_number)
+		if (aggr_node_number + curr_root_node_number) == (elem_node_number + 1) {
+			leaf_number = node_to_leaf_number(curr_root_node_number)
+			left_tree_leaf_number = get_left_leaf_number(leaf_number)
+			left_tree_node_number = leaf_to_node_number(left_tree_leaf_number)
 
-				left_node_position := aggr_node_number + left_tree_node_number - 1
-				right_node_position := aggr_node_number + curr_root_node_number - 2
+			left_node_position := aggr_node_number + left_tree_node_number - 1
+			right_node_position := aggr_node_number + curr_root_node_number - 2
 
-				left_elem, right_elem := m.getNode(left_node_position), m.getNode(right_node_position)
+			left_elem, right_elem := m.getNode(left_node_position), m.getNode(right_node_position)
 
-				return left_elem, right_elem
-			}
+			return left_elem, right_elem
+		}
 
-			if elem_node_number < (aggr_node_number + left_tree_node_number) {
-				// branch left
-				curr_root_node_number = left_tree_node_number
-			} else {
-				// branch right
-				curr_root_node_number = curr_root_node_number - left_tree_node_number - 1
-				aggr_node_number += left_tree_node_number
-			}
+		if elem_node_number < (aggr_node_number + left_tree_node_number) {
+			// branch left
+			curr_root_node_number = left_tree_node_number
 		} else {
-			break
+			// branch right
+			curr_root_node_number = curr_root_node_number - left_tree_node_number - 1
+			aggr_node_number += left_tree_node_number
 		}
 	}
 
@@ -283,36 +275,28 @@ func (m *mmr) push(newElem *Node) {
 	} else {
 		nodes_to_hash, curr_tree_number, aggr_node_number := elemNodes(make([]*Node, 0, 0)), m.leafNum, uint64(0)
 
-		for {
-			if !IsPowerOfTwo(curr_tree_number) {
-				m.removeLastElem()
-				left_tree_number := NextPowerOfTwo(curr_tree_number) / 2
-				aggr_node_number += left_tree_number
-				right_tree_number := curr_tree_number - left_tree_number
+		for !IsPowerOfTwo(curr_tree_number) {
+			m.removeLastElem()
+			left_tree_number := NextPowerOfTwo(curr_tree_number) / 2
+			aggr_node_number += left_tree_number
+			right_tree_number := curr_tree_number - left_tree_number
 
-				left_root_node_number := GetNodeFromLeaf(aggr_node_number) - 1
-				nodes_to_hash.push(m.getNode(left_root_node_number))
-				curr_tree_number = right_tree_number
-			} else {
-				break
-			}
+			left_root_node_number := GetNodeFromLeaf(aggr_node_number) - 1
+			nodes_to_hash.push(m.getNode(left_root_node_number))
+			curr_tree_number = right_tree_number
 		}
 		nodes_to_hash.push(m.getRootNode())
 		m.values = append(m.values, newElem)
 		newElem.index = uint64(len(m.values) - 1)
 		nodes_to_hash.push(newElem)
 
-		for {
-			if len(nodes_to_hash) > 1 {
-				right := nodes_to_hash.pop()
-				left := nodes_to_hash.pop()
-				parent := merge(left, right)
-				m.values = append(m.values, parent)
-				parent.index = uint64(len(m.values) - 1)
-				nodes_to_hash.push(parent)
-			} else {
-				break
-			}
+		for len(nodes_to_hash) > 1 {
+			right := nodes_to_hash.pop()
+			left := nodes_to_hash.pop()
+			parent := merge(left, right)
+			m.values = append(m.values, parent)
+			parent.index = uint64(len(m.values) - 1)
+			nodes_to_hash.push(parent)
 		}
 		m.leafNum += 1
 	}
@@ -352,33 +336,29 @@ func (m *mmr) getRootDifficulty() *big.Int {
 }
 func (m *mmr) getChildByAggrWeightDisc(weight *big.Int) uint64 {
 	AggrWeight, aggr_node_number, curr_tree_number := big.NewInt(0), uint64(0), m.leafNum
-	for {
-		if curr_tree_number > 1 {
-			left_tree_number := curr_tree_number / 2
-			if !IsPowerOfTwo(curr_tree_number) {
-				left_tree_number = NextPowerOfTwo(curr_tree_number) / 2
+	for curr_tree_number > 1 {
+		left_tree_number := curr_tree_number / 2
+		if !IsPowerOfTwo(curr_tree_number) {
+			left_tree_number = NextPowerOfTwo(curr_tree_number) / 2
+		}
+		n := m.getNode(GetNodeFromLeaf(aggr_node_number+left_tree_number) - 1)
+		if n == nil {
+			panic("wrong pos1")
+		}
+		left_tree_difficulty := n.getDifficulty()
+		if weight.Cmp(new(big.Int).Add(AggrWeight, left_tree_difficulty)) >= 0 {
+			// branch right
+			aggr_node_number += left_tree_number
+			left_root_node_number := GetNodeFromLeaf(aggr_node_number) - 1
+			n1 := m.getNode(left_root_node_number)
+			if n1 == nil {
+				panic("wrong pos2")
 			}
-			n := m.getNode(GetNodeFromLeaf(aggr_node_number+left_tree_number) - 1)
-			if n == nil {
-				panic("wrong pos1")
-			}
-			left_tree_difficulty := n.getDifficulty()
-			if weight.Cmp(new(big.Int).Add(AggrWeight, left_tree_difficulty)) >= 0 {
-				// branch right
-				aggr_node_number += left_tree_number
-				left_root_node_number := GetNodeFromLeaf(aggr_node_number) - 1
-				n1 := m.getNode(left_root_node_number)
-				if n1 == nil {
-					panic("wrong pos2")
-				}
-				AggrWeight = new(big.Int).Add(AggrWeight, n1.getDifficulty())
-				curr_tree_number = curr_tree_number - left_tree_number
-			} else {
-				// branch left
-				curr_tree_number = left_tree_number
-			}
+			AggrWeight = new(big.Int).Add(AggrWeight, n1.getDifficulty())
+			curr_tree_number = curr_tree_number - left_tree_number
 		} else {
-			break
+			// branch left
+			curr_tree_number = left_tree_number
 		}
 	}
 	return aggr_node_number
@@ -520,15 +500,11 @@ func (m *mmr) CreateNewProof(right_difficulty *big.Int) (*ProofInfo, []uint64, [
 	// 10. block: first block of tenth last 30_000 block interval
 	extra_blocks, current_block := []uint64{}, ((m.getLeafNumber()-1)/30000)*30000
 	added := 0
-	for {
-		if current_block > 30000 && added < 10 {
-			// blocks = append(blocks, current_block)
-			extra_blocks = append(extra_blocks, current_block)
-			current_block -= 30000
-			added += 1
-		} else {
-			break
-		}
+	for current_block > 30000 && added < 10 {
+		// blocks = append(blocks, current_block)
+		extra_blocks = append(extra_blocks, current_block)
+		current_block -= 30000
+		added += 1
 	}
 
 	sort.Slice(blocks, func(i, j int) bool {
@@ -545,22 +521,18 @@ func get_root(nodes []*VerifyElem) (Hash, *big.Int) {
 		tmp = append(tmp, v)
 	}
 	tmp_nodes := VerifyElems(tmp)
-	for {
-		if len(tmp_nodes) > 1 {
-			node2 := tmp_nodes.pop_back()
-			node1 := tmp_nodes.pop_back()
-			hash := merge2(node1.Res.h, node2.Res.h)
-			tmp_nodes = append(tmp_nodes, &VerifyElem{
-				Res: &proofRes{
-					h:  hash,
-					td: new(big.Int).Add(node1.Res.td, node2.Res.td),
-				},
-				Index:      math.MaxUint64, // uint64(-1) .. none
-				LeafNumber: math.MaxUint64, // uint64(-1) .. none
-			})
-		} else {
-			break
-		}
+	for len(tmp_nodes) > 1 {
+		node2 := tmp_nodes.pop_back()
+		node1 := tmp_nodes.pop_back()
+		hash := merge2(node1.Res.h, node2.Res.h)
+		tmp_nodes = append(tmp_nodes, &VerifyElem{
+			Res: &proofRes{
+				h:  hash,
+				td: new(big.Int).Add(node1.Res.td, node2.Res.td),
+			},
+			Index:      math.MaxUint64, // uint64(-1) .. none
+			LeafNumber: math.MaxUint64, // uint64(-1) .. none
+		})
 	}
 	if len(tmp_nodes) >= 1 {
 		return tmp_nodes[0].Res.h, tmp_nodes[0].Res.td
@@ -587,106 +559,98 @@ func (p *ProofInfo) VerifyProof(blocks []*ProofBlock) bool {
 		return false
 	}
 	nodes := VerifyElems([]*VerifyElem{})
-	for {
-		if !proofs.is_empty() {
-			proof_elem := proofs.pop_front()
-			if proof_elem.Cat == 2 {
-				proof_block := proof_blocks.pop()
-				number := proof_block.Number
+	for !proofs.is_empty() {
+		proof_elem := proofs.pop_front()
+		if proof_elem.Cat == 2 {
+			proof_block := proof_blocks.pop()
+			number := proof_block.Number
 
-				if !nodes.is_empty() {
-					//TODO: Verification of previous MMR should happen here
-					//weil in einem Ethereum block header kein mmr hash vorhanden ist, kann man
-					//dies nicht überprüfen, wenn doch irgendwann vorhanden, dann einfach
-					//'block_header.mmr == old_root_hash' überprüfen
-					_, left_difficulty := get_root(nodes)
-					left, middle := new(big.Float).SetInt(left_difficulty), new(big.Float).Mul(new(big.Float).SetInt(root_elem.Res.td), big.NewFloat(proof_block.AggrWeight))
-					right := new(big.Float).Add(new(big.Float).SetInt(left_difficulty), new(big.Float).SetInt(proof_elem.Res.td))
-					if left.Cmp(middle) > 0 || right.Cmp(middle) <= 0 {
-						// "aggregated difficulty is not correct, should coincide with: {} <= {} < {}",left, middle, right
-						return false
+			if !nodes.is_empty() {
+				//TODO: Verification of previous MMR should happen here
+				//weil in einem Ethereum block header kein mmr hash vorhanden ist, kann man
+				//dies nicht überprüfen, wenn doch irgendwann vorhanden, dann einfach
+				//'block_header.mmr == old_root_hash' überprüfen
+				_, left_difficulty := get_root(nodes)
+				left, middle := new(big.Float).SetInt(left_difficulty), new(big.Float).Mul(new(big.Float).SetInt(root_elem.Res.td), big.NewFloat(proof_block.AggrWeight))
+				right := new(big.Float).Add(new(big.Float).SetInt(left_difficulty), new(big.Float).SetInt(proof_elem.Res.td))
+				if left.Cmp(middle) > 0 || right.Cmp(middle) <= 0 {
+					// "aggregated difficulty is not correct, should coincide with: {} <= {} < {}",left, middle, right
+					return false
+				}
+			}
+			if number%2 == 0 && number != (root_elem.LeafNum-1) {
+				right_node := proofs.pop_front()
+				right_node_hash, right_node_diff := right_node.Res.h, new(big.Int).Set(right_node.Res.td)
+				if right_node.Cat == 2 || right_node.Cat == 1 {
+					if right_node.Cat == 2 {
+						proof_blocks.pop()
 					}
-				}
-				if number%2 == 0 && number != (root_elem.LeafNum-1) {
-					right_node := proofs.pop_front()
-					right_node_hash, right_node_diff := right_node.Res.h, new(big.Int).Set(right_node.Res.td)
-					if right_node.Cat == 2 || right_node.Cat == 1 {
-						if right_node.Cat == 2 {
-							proof_blocks.pop()
-						}
-					} else {
-						// Expected ???
-						return false
-					}
-					hash := merge2(proof_elem.Res.h, right_node_hash)
-					nodes = append(nodes, &VerifyElem{
-						Res: &proofRes{
-							h:  hash,
-							td: new(big.Int).Add(proof_elem.Res.td, right_node_diff),
-						},
-						Index:      number / 2,
-						LeafNumber: root_elem.LeafNum / 2,
-					})
 				} else {
-					res0 := nodes.pop_back()
-					hash := merge2(res0.Res.h, proof_elem.Res.h)
-					nodes = append(nodes, &VerifyElem{
-						Res: &proofRes{
-							h:  hash,
-							td: new(big.Int).Add(proof_elem.Res.td, res0.Res.td),
-						},
-						Index:      number / 2,
-						LeafNumber: root_elem.LeafNum / 2,
-					})
+					// Expected ???
+					return false
 				}
-			} else if proof_elem.Cat == 1 {
-				if proof_elem.Right {
-					left_node := nodes.pop_back()
-					hash := merge2(left_node.Res.h, proof_elem.Res.h)
-					nodes = append(nodes, &VerifyElem{
-						Res: &proofRes{
-							h:  hash,
-							td: new(big.Int).Add(left_node.Res.td, proof_elem.Res.td),
-						},
-						Index:      left_node.Index / 2,
-						LeafNumber: left_node.LeafNumber / 2,
-					})
-				} else {
-					nodes = append(nodes, &VerifyElem{
-						Res:        proof_elem.Res,
-						Index:      math.MaxUint64, // UINT64(-1)
-						LeafNumber: math.MaxUint64, // UINT64(-1)
-					})
-				}
-			} else if proof_elem.Cat == 0 {
-				// do nothing
+				hash := merge2(proof_elem.Res.h, right_node_hash)
+				nodes = append(nodes, &VerifyElem{
+					Res: &proofRes{
+						h:  hash,
+						td: new(big.Int).Add(proof_elem.Res.td, right_node_diff),
+					},
+					Index:      number / 2,
+					LeafNumber: root_elem.LeafNum / 2,
+				})
 			} else {
-				panic("invalid Cat...")
+				res0 := nodes.pop_back()
+				hash := merge2(res0.Res.h, proof_elem.Res.h)
+				nodes = append(nodes, &VerifyElem{
+					Res: &proofRes{
+						h:  hash,
+						td: new(big.Int).Add(proof_elem.Res.td, res0.Res.td),
+					},
+					Index:      number / 2,
+					LeafNumber: root_elem.LeafNum / 2,
+				})
 			}
-			for {
-				if len(nodes) > 1 {
-					node2 := nodes.pop_back()
-					node1 := nodes.pop_back()
-					if math.MaxUint64 == node2.Index || (node2.Index%2 != 1 && !proofs.is_empty()) {
-						nodes = append(nodes, node1)
-						nodes = append(nodes, node2)
-						break
-					}
-					hash := merge2(node1.Res.h, node2.Res.h)
-					nodes = append(nodes, &VerifyElem{
-						Res: &proofRes{
-							h:  hash,
-							td: new(big.Int).Add(node1.Res.td, node2.Res.td),
-						},
-						Index:      node2.Index / 2,
-						LeafNumber: node2.LeafNumber / 2,
-					})
-				} else {
-					break
-				}
+		} else if proof_elem.Cat == 1 {
+			if proof_elem.Right {
+				left_node := nodes.pop_back()
+				hash := merge2(left_node.Res.h, proof_elem.Res.h)
+				nodes = append(nodes, &VerifyElem{
+					Res: &proofRes{
+						h:  hash,
+						td: new(big.Int).Add(left_node.Res.td, proof_elem.Res.td),
+					},
+					Index:      left_node.Index / 2,
+					LeafNumber: left_node.LeafNumber / 2,
+				})
+			} else {
+				nodes = append(nodes, &VerifyElem{
+					Res:        proof_elem.Res,
+					Index:      math.MaxUint64, // UINT64(-1)
+					LeafNumber: math.MaxUint64, // UINT64(-1)
+				})
 			}
+		} else if proof_elem.Cat == 0 {
+			// do nothing
 		} else {
-			break
+			panic("invalid Cat...")
+		}
+		for len(nodes) > 1 {
+			node2 := nodes.pop_back()
+			node1 := nodes.pop_back()
+			if math.MaxUint64 == node2.Index || (node2.Index%2 != 1 && !proofs.is_empty()) {
+				nodes = append(nodes, node1)
+				nodes = append(nodes, node2)
+				break
+			}
+			hash := merge2(node1.Res.h, node2.Res.h)
+			nodes = append(nodes, &VerifyElem{
+				Res: &proofRes{
+					h:  hash,
+					td: new(big.Int).Add(node1.Res.td, node2.Res.td),
+				},
+				Index:      node2.Index / 2,
+				LeafNumber: node2.LeafNumber / 2,
+			})
 		}
 	}
 
@@ -703,14 +667,10 @@ func VerifyRequiredBlocks(blocks []uint64, root_hash Hash, root_difficulty, righ
 	required_queries := uint64(vd_calculate_m(float64(lambda), c, r1, r2, root_leaf_number) + 1.0)
 	extra_blocks, current_block := []uint64{}, ((root_leaf_number-1)/30000)*30000
 	added := 0
-	for {
-		if current_block > 30000 && added < 10 {
-			extra_blocks = append(extra_blocks, current_block)
-			current_block -= 30000
-			added += 1
-		} else {
-			break
-		}
+	for current_block > 30000 && added < 10 {
+		extra_blocks = append(extra_blocks, current_block)
+		current_block -= 30000
+		added += 1
 	}
 
 	// required queries can contain the same block number multiple times
