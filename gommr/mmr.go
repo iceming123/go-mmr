@@ -134,6 +134,11 @@ func (m *mmr) push(n *Node) *Node {
 	m.cur_size = pos + 1
 	return n
 }
+
+// func (m *mmr) pop() *Node {
+
+// }
+// func (m *mmr) getLast()
 func (m *mmr) getRoot() Hash {
 	if m.cur_size == 0 {
 		return Hash{0}

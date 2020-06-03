@@ -14,9 +14,9 @@ func allOnes(num uint64) bool {
 	return num != 0 && countZore(num) == leadingZeros(num)
 }
 func jumpLeft(pos uint64) uint64 {
-	bit_length := 64 - leadingZeros(pos)
-	most_significant_bits := uint64(1) << uint64(bit_length-1)
-	return pos - (most_significant_bits - 1)
+	bitLength := 64 - leadingZeros(pos)
+	mostSignificantBits := uint64(1) << uint64(bitLength-1)
+	return pos - (mostSignificantBits - 1)
 }
 func pos_height_in_tree(pos uint64) int {
 	pos += 1
