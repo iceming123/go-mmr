@@ -45,6 +45,9 @@ func (p *ProofInfo) String() string {
 	return fmt.Sprintf("RootHash:%s \n,RootDiff:%v,LeafNum:%v \n,Elems:%s", p.RootHash.Hex(),
 		p.RootDifficulty, p.LeafNumber, strings.Join(elems, "\n "))
 }
+func (p *Node) String() string {
+	return fmt.Sprintf("Node:%s,RootDiff:%v,Index:%v", p.value.Hex(), p.difficulty, p.index)
+}
 func Test03(t *testing.T) {
 	a, b := uint64(1), uint64(2)
 	fmt.Println("1:", RlpHash(a), "2:", RlpHash(b))
@@ -110,5 +113,22 @@ func Test05(t *testing.T) {
 	}
 	b := proof.VerifyProof(pBlocks)
 	fmt.Println("b:", b)
+	fmt.Println("finish")
+}
+
+func Test06(t *testing.T) {
+	mmr := NewMMR()
+	for i := 0; i < 8; i++ {
+		mmr.push(&Node{
+			value:      BytesToHash(IntToBytes(i)),
+			difficulty: big.NewInt(1000),
+		})
+	}
+	fmt.Println("leaf_number:", mmr.getLeafNumber(), "root_difficulty:", mmr.getRootDifficulty())
+	n := mmr.getNode(11)
+	fmt.Println("n:", n)
+	b := n.hasChildren(mmr)
+	fmt.Println("hasChildren:", b)
+
 	fmt.Println("finish")
 }
