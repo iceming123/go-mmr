@@ -301,6 +301,74 @@ func (m *mmr) push(newElem *Node) {
 		m.leafNum += 1
 	}
 }
+func (m *mmr) Pop() *Node {
+	if m.leafNum <= 0 {
+		return nil
+	}
+	peakNode, curr_tree_number, aggr_node_number := elemNodes(make([]*Node, 0, 0)), m.leafNum, uint64(0)
+	for !IsPowerOfTwo(curr_tree_number) {
+		m.removeLastElem()
+		left_tree_number := NextPowerOfTwo(curr_tree_number) / 2
+		aggr_node_number += left_tree_number
+		right_tree_number := curr_tree_number - left_tree_number
+
+		left_root_node_number := GetNodeFromLeaf(aggr_node_number) - 1
+		peakNode.push(m.getNode(left_root_node_number))
+		curr_tree_number = right_tree_number
+	}
+	peakNode.push(m.getRootNode())
+	lastPeak := peakNode.pop()
+	tmp, remove := m.splitPeak(lastPeak)
+	if remove == nil {
+		return nil
+	}
+	m.removeLastLeafNode(remove)
+	peakNode = append(peakNode, tmp...)
+	for len(peakNode) > 1 {
+		right := peakNode.pop()
+		left := peakNode.pop()
+		parent := merge(left, right)
+		m.values = append(m.values, parent)
+		parent.index = uint64(len(m.values) - 1)
+		peakNode.push(parent)
+	}
+	return remove
+}
+func (m *mmr) splitPeak(lastPeak *Node) ([]*Node, *Node) {
+	peakNodes := elemNodes(make([]*Node, 0, 0))
+	height := pos_height_in_tree(lastPeak.index)
+	if height == 0 {
+		return peakNodes, lastPeak
+	}
+	peaksize := (uint64(1) << uint64(height+1)) - 1
+	offset := lastPeak.index + 1 - peaksize
+	peaksize = peaksize - 1
+
+	for peaksize > 0 {
+		height, pos := left_peak_height_pos(peaksize)
+		if height == 0 {
+			peakNodes.push(m.getNode(pos + offset))
+			return peakNodes, m.getNode(pos + offset + 1)
+		}
+		if height > 0 {
+			leafPeak := m.getNode(pos + offset)
+			peakNodes.push(leafPeak)
+			height, pos = get_right_peak(height, pos, peaksize)
+			rightPeak := m.getNode(pos + offset)
+			peaksize = (uint64(1) << uint64(height+1)) - 1
+			offset = rightPeak.index + 1 - peaksize
+			peaksize = peaksize - 1
+		}
+	}
+	return peakNodes, nil
+}
+func (m *mmr) removeLastLeafNode(leaf *Node) {
+	index := leaf.index
+	m.values = append(m.values[:index], m.values[index+1:]...)
+	m.leafNum = m.leafNum - 1
+	return
+}
+
 func (m *mmr) removeLastElem() {
 	if len(m.values) <= 0 {
 		return
