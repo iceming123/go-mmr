@@ -345,6 +345,7 @@ func (m *mmr) splitPeak(lastPeak *Node) ([]*Node, *Node) {
 	peaksize = peaksize - 1
 
 	for peaksize > 0 {
+		m.removeLastElem()
 		height, pos := left_peak_height_pos(peaksize)
 		if height == 0 {
 			peakNodes.push(m.getNode(pos + offset))
